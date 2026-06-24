@@ -1,0 +1,66 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.coverage
+.coverage.*
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+htmlcov/
+coverage.xml
+
+# Node
+node_modules/
+.pnpm-store/
+frontend/dist/
+dist/
+coverage/
+*.tsbuildinfo
+.eslintcache
+.vite/
+
+# Local application data
+backend/storage/
+uploads/
+media/
+*.sqlite
+*.sqlite3
+*.db
+
+# Private project planning
+/implementation.md
+/CHECKLIST.md
+
+# Local tooling and editors
+.DS_Store
+.AppleDouble
+.LSOverride
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Containers and logs
+*.log
+logs/
+postgres-data/
+
+# Temporary files
+.cache/
+tmp/
+temp/
+*.tmp

@@ -1,0 +1,11 @@
+packages:
+  - .
+
+onlyBuiltDependencies:
+  - esbuild
+allowBuilds:
+  esbuild: true
+
+# Installation is an explicit setup step. Script execution must not silently
+# rewrite node_modules, which keeps local and CI runs deterministic.
+verifyDepsBeforeRun: false
