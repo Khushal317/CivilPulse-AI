@@ -1,24 +1,26 @@
-import { createBrowserRouter } from "react-router-dom";
+import { createBrowserRouter, type RouteObject } from "react-router-dom";
 
-import { AppLayout } from "../layouts/AppLayout";
+import { AdminLayout } from "../layouts/AdminLayout";
+import { ReportPage } from "../features/reports/ReportPage";
+import { ReportReviewPage } from "../features/reports/ReportReviewPage";
+import { PublicLayout } from "../layouts/PublicLayout";
 import { HomePage } from "../pages/HomePage";
-import { NotFoundPage } from "../pages/NotFoundPage";
 import { PlaceholderPage } from "../pages/PlaceholderPage";
+import { RouteErrorPage } from "../pages/RouteErrorPage";
 
-export const router = createBrowserRouter([
+export const appRoutes: RouteObject[] = [
   {
-    element: <AppLayout />,
+    element: <PublicLayout />,
+    errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <HomePage /> },
       {
         path: "report",
-        element: (
-          <PlaceholderPage
-            eyebrow="Citizen reporting"
-            title="Report a local issue"
-            description="The AI-assisted reporting and review flow will be implemented in Phase 4."
-          />
-        ),
+        element: <ReportPage />,
+      },
+      {
+        path: "report/review/:draftId",
+        element: <ReportReviewPage />,
       },
       {
         path: "issues",
@@ -30,18 +32,36 @@ export const router = createBrowserRouter([
           />
         ),
       },
+      { path: "*", element: <RouteErrorPage /> },
+    ],
+  },
+  {
+    path: "/admin",
+    element: <AdminLayout />,
+    errorElement: <RouteErrorPage />,
+    children: [
       {
-        path: "admin",
+        index: true,
         element: (
           <PlaceholderPage
             eyebrow="Issue management"
             title="Administrator dashboard"
-            description="Secure authentication and issue management will be implemented in Phase 7."
+            description="Dashboard metrics and secure management tools will be implemented in Phase 7."
           />
         ),
       },
-      { path: "*", element: <NotFoundPage /> },
+      {
+        path: "issues",
+        element: (
+          <PlaceholderPage
+            eyebrow="Admin issue queue"
+            title="Manage reported issues"
+            description="Filtering, status updates, and public notes will be implemented in Phase 7."
+          />
+        ),
+      },
     ],
   },
-]);
+];
 
+export const router = createBrowserRouter(appRoutes);

@@ -9,8 +9,16 @@ description = "FastAPI backend for CivicPulse AI"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic>=1.14,<2.0",
     "fastapi>=0.115,<1.0",
+    "google-cloud-storage>=3.1,<4.0",
+    "google-genai>=1.30,<2.0",
+    "pillow>=11.1,<13.0",
+    "psycopg[binary]>=3.2,<4.0",
     "pydantic-settings>=2.7,<3.0",
+    "python-multipart>=0.0.20,<1.0",
+    "sqlalchemy>=2.0,<3.0",
+    "structlog>=25.1,<26.0",
     "uvicorn[standard]>=0.34,<1.0",
 ]
 
@@ -29,6 +37,9 @@ include = ["app*"]
 [tool.pytest.ini_options]
 addopts = "-q --strict-config --strict-markers"
 testpaths = ["tests"]
+markers = [
+    "postgres: requires a reachable PostgreSQL test database",
+]
 
 [tool.coverage.run]
 branch = true
@@ -49,4 +60,3 @@ select = ["E", "F", "I", "UP", "B", "SIM", "RUF"]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-

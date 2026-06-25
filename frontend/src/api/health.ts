@@ -1,4 +1,4 @@
-import { env } from "../config/env";
+import { apiRequest } from "./client";
 
 export interface HealthResponse {
   status: "alive" | "ready";
@@ -6,16 +6,8 @@ export interface HealthResponse {
   version: string;
 }
 
-export async function getApiReadiness(signal?: AbortSignal): Promise<HealthResponse> {
-  const response = await fetch(`${env.apiBaseUrl}/health/ready`, {
-    headers: { Accept: "application/json" },
+export async function getApiHealth(signal?: AbortSignal): Promise<HealthResponse> {
+  return apiRequest<HealthResponse>("/health/live", {
     signal,
   });
-
-  if (!response.ok) {
-    throw new Error(`API readiness check failed with status ${response.status}`);
-  }
-
-  return (await response.json()) as HealthResponse;
 }
-

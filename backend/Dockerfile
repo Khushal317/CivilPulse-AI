@@ -8,6 +8,8 @@ WORKDIR /app
 
 COPY pyproject.toml README.md ./
 COPY app ./app
+COPY alembic.ini ./
+COPY alembic ./alembic
 RUN python -m pip install --no-cache-dir .
 
 FROM base AS development
@@ -23,4 +25,3 @@ USER civicpulse
 
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
-

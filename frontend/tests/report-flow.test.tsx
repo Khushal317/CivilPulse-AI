@@ -1,0 +1,152 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  Route,
+  RouterProvider,
+  Routes,
+} from "react-router-dom";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { AppProviders } from "../src/app/providers";
+import { ReportPage } from "../src/features/reports/ReportPage";
+import { ReportReviewPage } from "../src/features/reports/ReportReviewPage";
+import { createTestQueryClient, renderWithProviders } from "./test-utils";
+
+const draft = {
+  id: "11111111-1111-4111-8111-111111111111",
+  title: "Severe pothole near school gate",
+  original_description: "There is a large pothole near the school gate and bikes are slipping.",
+  ai_summary: "A large pothole creates a road safety risk near the school entrance.",
+  category: "road_damage",
+  severity: "high",
+  urgency_level: "urgent",
+  urgency_reason: "Children and two-wheel riders use this road every day.",
+  suggested_department: "Public Works / Road Maintenance",
+  safety_risk: "Riders may lose control near the school entrance.",
+  citizen_explanation: "Review the structured complaint before publishing.",
+  suggested_next_action: "Publish the issue for community verification.",
+  location: "Sector 12",
+  landmark: "City Public School",
+  urgency_note: null,
+  image_url: "/api/v1/media/issues/test.png",
+  expires_at: "2026-06-25T12:00:00Z",
+  created_at: "2026-06-25T10:00:00Z",
+};
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function jsonResponse(body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    headers: { "Content-Type": "application/json" },
+    status,
+  });
+}
+
+function renderRouter(router: ReturnType<typeof createMemoryRouter>) {
+  return render(
+    <AppProviders queryClient={createTestQueryClient()}>
+      <RouterProvider router={router} />
+    </AppProviders>,
+  );
+}
+
+describe("reporting flow", () => {
+  it("validates required report fields before submitting", async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ReportPage />);
+
+    await user.click(screen.getByRole("button", { name: "Analyze with AI" }));
+
+    expect(screen.getByText("Choose one issue photo.")).toBeInTheDocument();
+    expect(screen.getByText("Describe the issue in at least 10 characters.")).toBeInTheDocument();
+    expect(screen.getByText("Enter the area or location.")).toBeInTheDocument();
+  });
+
+  it("submits a valid image report and navigates to review", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(draft, 201)));
+    render(
+      <AppProviders queryClient={createTestQueryClient()}>
+        <MemoryRouter initialEntries={["/report"]}>
+          <Routes>
+            <Route element={<ReportPage />} path="/report" />
+            <Route element={<div>Review route reached</div>} path="/report/review/:draftId" />
+          </Routes>
+        </MemoryRouter>
+      </AppProviders>,
+    );
+
+    await user.upload(
+      screen.getByLabelText("Issue photo"),
+      new File(["image"], "pothole.png", { type: "image/png" }),
+    );
+    await user.type(
+      screen.getByLabelText("What did you observe?"),
+      "There is a large pothole near the school gate.",
+    );
+    await user.type(screen.getByLabelText("Area or location"), "Sector 12");
+    await user.click(screen.getByRole("button", { name: "Analyze with AI" }));
+
+    expect(await screen.findByText("Review route reached")).toBeInTheDocument();
+  });
+
+  it("loads a draft and publishes it after review", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(draft))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          issue_id: "22222222-2222-4222-8222-222222222222",
+          public_reference: "CP-20260625-11111111",
+          status: "reported",
+          published_at: "2026-06-25T10:05:00Z",
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+    const router = createMemoryRouter(
+      [{ path: "/report/review/:draftId", element: <ReportReviewPage /> }],
+      { initialEntries: [`/report/review/${draft.id}`] },
+    );
+
+    renderRouter(router);
+
+    expect(await screen.findByText("Severe pothole near school gate")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Submit report" }));
+
+    expect(await screen.findByText("Your issue is now trackable.")).toBeInTheDocument();
+    expect(screen.getByText("CP-20260625-11111111")).toBeInTheDocument();
+  });
+
+  it("shows an expired draft recovery state", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          {
+            error: {
+              code: "draft_expired",
+              message: "This report draft has expired.",
+              details: [],
+              request_id: "request-1",
+            },
+          },
+          410,
+        ),
+      ),
+    );
+    const router = createMemoryRouter(
+      [{ path: "/report/review/:draftId", element: <ReportReviewPage /> }],
+      { initialEntries: [`/report/review/${draft.id}`] },
+    );
+
+    renderRouter(router);
+
+    expect(await screen.findByText("This report draft has expired")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Start a new report" })).toBeInTheDocument();
+  });
+});

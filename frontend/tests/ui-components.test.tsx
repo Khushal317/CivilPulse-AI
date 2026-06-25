@@ -1,0 +1,122 @@
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { useState } from "react";
+import { describe, expect, it, vi } from "vitest";
+
+import { ErrorState } from "../src/components/feedback/ErrorState";
+import {
+  CategoryBadge,
+  SeverityBadge,
+  StatusBadge,
+} from "../src/components/ui/Badge";
+import { Button } from "../src/components/ui/Button";
+import { Dialog } from "../src/components/ui/Dialog";
+import { SelectField, TextAreaField, TextField } from "../src/components/ui/FormField";
+import { Timeline } from "../src/components/ui/Timeline";
+import { runAccessibilityCheck } from "./accessibility";
+
+function DialogHarness() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <Button onClick={() => setOpen(true)}>Open confirmation</Button>
+      <Dialog isOpen={open} onClose={() => setOpen(false)} title="Reject this issue?">
+        This action records a public status change.
+      </Dialog>
+    </>
+  );
+}
+
+describe("UI components", () => {
+  it("connects form labels, hints, and errors accessibly", async () => {
+    const { container } = render(
+      <form>
+        <TextField hint="Use the nearest area name." label="Location" />
+        <TextAreaField error="Description is required." label="Description" />
+        <SelectField label="Category" optional>
+          <option value="">Choose a category</option>
+        </SelectField>
+      </form>,
+    );
+
+    expect(screen.getByLabelText("Location")).toHaveAccessibleDescription(
+      "Use the nearest area name.",
+    );
+    expect(screen.getByLabelText("Description")).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText("Optional")).toBeInTheDocument();
+    const accessibility = await runAccessibilityCheck(container);
+    expect(accessibility.violations).toEqual([]);
+  });
+
+  it("renders domain badges and a semantic timeline", () => {
+    render(
+      <>
+        <CategoryBadge category="road_damage" />
+        <SeverityBadge severity="high" />
+        <StatusBadge status="community_verified" />
+        <Timeline
+          items={[
+            { id: "1", title: "Reported", state: "complete" },
+            { id: "2", title: "Community verified", state: "current" },
+          ]}
+        />
+      </>,
+    );
+
+    expect(screen.getByText("Road damage")).toBeInTheDocument();
+    expect(screen.getByText("High")).toBeInTheDocument();
+    expect(screen.getAllByText("Community verified")).toHaveLength(2);
+    expect(screen.getByRole("list", { name: "Issue progress" })).toBeInTheDocument();
+  });
+
+  it("closes a confirmation dialog with Escape and restores focus", async () => {
+    const user = userEvent.setup();
+    render(<DialogHarness />);
+
+    const trigger = screen.getByRole("button", { name: "Open confirmation" });
+    await user.click(trigger);
+    expect(screen.getByRole("dialog", { name: "Reject this issue?" })).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it("keeps keyboard focus inside an open confirmation dialog", async () => {
+    const user = userEvent.setup();
+    render(
+      <Dialog
+        isOpen
+        onClose={() => undefined}
+        onConfirm={() => undefined}
+        title="Publish this report?"
+      >
+        Confirm the reviewed details.
+      </Dialog>,
+    );
+
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    const confirm = screen.getByRole("button", { name: "Confirm" });
+    expect(cancel).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(confirm).toHaveFocus();
+    await user.tab();
+    expect(cancel).toHaveFocus();
+  });
+
+  it("supports loading buttons and retryable error states", async () => {
+    const retry = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <>
+        <Button isLoading>Save</Button>
+        <ErrorState onRetry={retry} />
+      </>,
+    );
+
+    expect(screen.getByRole("button", { name: "Working…" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Try again" }));
+    expect(retry).toHaveBeenCalledOnce();
+  });
+});

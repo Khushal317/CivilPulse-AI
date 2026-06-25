@@ -22,6 +22,8 @@ The repository is organized as a React frontend, FastAPI backend, PostgreSQL dat
    docker compose up --build
    ```
 
+   Docker Compose waits for PostgreSQL, applies Alembic migrations, and then starts the API and frontend.
+
 4. Open:
    - Frontend: <http://localhost:5173>
    - API documentation: <http://localhost:8000/docs>
@@ -41,6 +43,7 @@ Start the backend:
 
 ```bash
 cd backend
+.venv/bin/alembic -c alembic.ini upgrade head
 .venv/bin/uvicorn app.main:app --reload
 ```
 
@@ -51,6 +54,25 @@ pnpm --dir frontend dev
 ```
 
 The frontend reads `VITE_API_BASE_URL` and defaults to `http://localhost:8000`.
+
+## Database Migrations
+
+Create PostgreSQL and set `DATABASE_URL`, then run migrations from the repository root:
+
+```bash
+make migrate
+```
+
+Useful direct commands:
+
+```bash
+cd backend
+.venv/bin/alembic -c alembic.ini current
+.venv/bin/alembic -c alembic.ini upgrade head
+.venv/bin/alembic -c alembic.ini downgrade -1
+```
+
+`/health/live` confirms the API process is running. `/health/ready` returns success only when PostgreSQL is reachable and its Alembic revision matches the application.
 
 ## Quality Checks
 
@@ -68,7 +90,21 @@ make check
 - Gemini credentials are backend-only.
 - `.env.example` documents names and safe placeholders, not real credentials.
 
+## Reporting Configuration
+
+Phase 4 supports two analysis modes:
+
+- `AI_PROVIDER=demo` uses deterministic local analysis for development and tests.
+- `AI_PROVIDER=gemini` sends the image and civic-issue text to Gemini using the
+  backend-only `GEMINI_API_KEY`.
+
+Uploaded images use `STORAGE_BACKEND=local` by default. Production deployments
+can use `STORAGE_BACKEND=gcs` with `STORAGE_BUCKET` configured. See
+`docs/reporting-workflow.md` for the request lifecycle, privacy boundary, and
+failure behavior.
+
 ## Current Phase
 
-Phase 1 establishes the project foundation. Domain models, migrations, Gemini analysis, reporting, tracking, community verification, and admin behavior are implemented in later phases.
-
+Phase 4 implements the private report draft workflow: validated image upload,
+AI-assisted structuring, citizen review and editing, cancellation, draft expiry,
+and idempotent publication with an initial Reported timeline entry.

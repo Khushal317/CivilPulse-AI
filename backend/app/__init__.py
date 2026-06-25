@@ -1,2 +1,1 @@
 """CivicPulse API package."""
-

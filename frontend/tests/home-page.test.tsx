@@ -1,9 +1,8 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { HomePage } from "../src/pages/HomePage";
+import { renderWithProviders } from "./test-utils";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -24,16 +23,7 @@ describe("HomePage", () => {
       }),
     );
 
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
-    const router = createMemoryRouter([{ path: "/", element: <HomePage /> }]);
-
-    render(
-      <QueryClientProvider client={queryClient}>
-        <RouterProvider router={router} />
-      </QueryClientProvider>,
-    );
+    renderWithProviders(<HomePage />);
 
     expect(
       screen.getByRole("heading", {
@@ -41,5 +31,6 @@ describe("HomePage", () => {
       }),
     ).toBeInTheDocument();
     expect(await screen.findByText("Connected · v0.1.0")).toBeInTheDocument();
+    expect(screen.getByText("Phase 4 · AI-assisted reporting")).toBeInTheDocument();
   });
 });

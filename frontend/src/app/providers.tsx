@@ -1,17 +1,33 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      refetchOnWindowFocus: false,
-      staleTime: 30_000,
-    },
-  },
-});
+import { NotificationProvider } from "./notifications";
 
-export function AppProviders({ children }: PropsWithChildren) {
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+function createAppQueryClient() {
+  return new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: 1,
+        refetchOnWindowFocus: false,
+        staleTime: 30_000,
+      },
+    },
+  });
 }
 
+const appQueryClient = createAppQueryClient();
+
+type AppProvidersProps = PropsWithChildren<{
+  queryClient?: QueryClient;
+}>;
+
+export function AppProviders({
+  children,
+  queryClient = appQueryClient,
+}: AppProvidersProps) {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <NotificationProvider>{children}</NotificationProvider>
+    </QueryClientProvider>
+  );
+}

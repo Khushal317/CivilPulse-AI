@@ -1,7 +1,7 @@
 PNPM ?= pnpm
 PYTHON ?= python3
 
-.PHONY: install dev backend-dev frontend-dev lint typecheck test check
+.PHONY: install dev db-up db-down migrate backend-dev frontend-dev lint typecheck test check
 
 install:
 	$(PYTHON) -m venv backend/.venv
@@ -11,6 +11,15 @@ install:
 
 dev:
 	docker compose up --build
+
+db-up:
+	docker compose up -d postgres
+
+db-down:
+	docker compose down
+
+migrate:
+	cd backend && .venv/bin/alembic -c alembic.ini upgrade head
 
 backend-dev:
 	cd backend && .venv/bin/uvicorn app.main:app --reload
@@ -31,4 +40,3 @@ test:
 	$(PNPM) --dir frontend test
 
 check: lint typecheck test
-

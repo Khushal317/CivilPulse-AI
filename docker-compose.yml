@@ -25,21 +25,32 @@ services:
     environment:
       APP_ENV: development
       API_RELOAD: "true"
-      CORS_ORIGINS: http://localhost:5173
+      CORS_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
       DATABASE_URL: postgresql+psycopg://civicpulse:${POSTGRES_PASSWORD:-civicpulse-local}@postgres:5432/${POSTGRES_DB:-civicpulse}
     ports:
       - "8000:8000"
     volumes:
       - ./backend:/app
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/ready')"]
       interval: 10s
       timeout: 3s
       retries: 5
       start_period: 10s
+
+  migrate:
+    build:
+      context: ./backend
+      target: development
+    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://civicpulse:${POSTGRES_PASSWORD:-civicpulse-local}@postgres:5432/${POSTGRES_DB:-civicpulse}
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   frontend:
     build:
@@ -59,4 +70,3 @@ services:
 volumes:
   civicpulse-postgres:
   frontend-node-modules:
-

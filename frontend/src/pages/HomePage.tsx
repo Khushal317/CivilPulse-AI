@@ -1,12 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
-import { getApiReadiness } from "../api/health";
+import { getApiHealth } from "../api/health";
+import { Card } from "../components/ui/Card";
+import { buttonClassName } from "../components/ui/buttonStyles";
 
 export function HomePage() {
-  const readiness = useQuery({
-    queryKey: ["api-readiness"],
-    queryFn: ({ signal }) => getApiReadiness(signal),
+  const apiHealth = useQuery({
+    queryKey: ["api-health"],
+    queryFn: ({ signal }) => getApiHealth(signal),
   });
 
   return (
@@ -20,15 +22,20 @@ export function HomePage() {
             tracked from first report to resolution.
           </p>
           <div className="actions">
-            <Link className="button button-primary" to="/report">
+            <Link className={buttonClassName("primary")} to="/report">
               Report an issue
             </Link>
-            <Link className="button button-secondary" to="/issues">
+            <Link className={buttonClassName("secondary")} to="/issues">
               View public tracker
             </Link>
           </div>
         </div>
-        <aside className="foundation-card" aria-labelledby="foundation-title">
+        <Card
+          as="aside"
+          className="foundation-card"
+          aria-labelledby="foundation-title"
+          padding="large"
+        >
           <p className="eyebrow">Foundation status</p>
           <h2 id="foundation-title">The product core is connected.</h2>
           <dl className="status-list">
@@ -43,22 +50,21 @@ export function HomePage() {
               <dd aria-live="polite">
                 <span
                   className={`status-dot ${
-                    readiness.isSuccess ? "status-dot-ready" : "status-dot-pending"
+                    apiHealth.isSuccess ? "status-dot-ready" : "status-dot-pending"
                   }`}
                 />
-                {readiness.isPending && "Checking…"}
-                {readiness.isSuccess && `Connected · v${readiness.data.version}`}
-                {readiness.isError && "Unavailable"}
+                {apiHealth.isPending && "Checking…"}
+                {apiHealth.isSuccess && `Connected · v${apiHealth.data.version}`}
+                {apiHealth.isError && "Unavailable"}
               </dd>
             </div>
             <div>
               <dt>Current phase</dt>
-              <dd>Phase 1 · Foundation</dd>
+              <dd>Phase 4 · AI-assisted reporting</dd>
             </div>
           </dl>
-        </aside>
+        </Card>
       </div>
     </section>
   );
 }
-
