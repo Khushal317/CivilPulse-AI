@@ -5,12 +5,20 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable, Table
 
 from app.db.base import Base
-from app.models import AdminSession, CommunityAction, Issue, IssueDraft, IssueUpdate
+from app.models import (
+    AdminSession,
+    CivicOperationsReport,
+    CommunityAction,
+    Issue,
+    IssueDraft,
+    IssueUpdate,
+)
 
 
 def test_core_tables_are_registered() -> None:
     assert set(Base.metadata.tables) == {
         "admin_sessions",
+        "civic_operations_reports",
         "community_actions",
         "issue_drafts",
         "issue_updates",
@@ -50,6 +58,13 @@ def test_enum_columns_create_database_checks() -> None:
 
 
 def test_expected_models_use_uuid_primary_keys() -> None:
-    for model in (IssueDraft, Issue, IssueUpdate, CommunityAction, AdminSession):
+    for model in (
+        IssueDraft,
+        Issue,
+        IssueUpdate,
+        CommunityAction,
+        AdminSession,
+        CivicOperationsReport,
+    ):
         table = cast(Table, model.__table__)
         assert [column.name for column in table.primary_key.columns] == ["id"]

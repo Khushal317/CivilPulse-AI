@@ -43,6 +43,8 @@ media/
 # Private project planning
 /implementation.md
 /CHECKLIST.md
+/AgentUpgradePlan.md
+/AgentUpgradeChecklist.md
 
 # Local tooling and editors
 .DS_Store
