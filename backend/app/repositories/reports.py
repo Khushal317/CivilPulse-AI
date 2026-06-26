@@ -20,6 +20,10 @@ class ReportRepository(Protocol):
 
     def find_issue_by_image_key(self, image_key: str) -> Issue | None: ...
 
+    def expired_unpublished_drafts(self, cutoff: datetime, *, limit: int) -> list[IssueDraft]: ...
+
+    def existing_image_keys(self, image_keys: set[str]) -> set[str]: ...
+
     def flush(self) -> None: ...
 
 
@@ -48,6 +52,32 @@ class SQLAlchemyReportRepository:
 
     def find_issue_by_image_key(self, image_key: str) -> Issue | None:
         return self._session.scalar(select(Issue).where(Issue.image_key == image_key))
+
+    def expired_unpublished_drafts(self, cutoff: datetime, *, limit: int) -> list[IssueDraft]:
+        return list(
+            self._session.scalars(
+                select(IssueDraft)
+                .where(IssueDraft.published_at.is_(None), IssueDraft.expires_at <= cutoff)
+                .order_by(IssueDraft.expires_at, IssueDraft.id)
+                .limit(limit)
+                .with_for_update(skip_locked=True),
+            ).all(),
+        )
+
+    def existing_image_keys(self, image_keys: set[str]) -> set[str]:
+        if not image_keys:
+            return set()
+        draft_keys = set(
+            self._session.scalars(
+                select(IssueDraft.image_key).where(IssueDraft.image_key.in_(image_keys)),
+            ).all(),
+        )
+        issue_keys = set(
+            self._session.scalars(
+                select(Issue.image_key).where(Issue.image_key.in_(image_keys)),
+            ).all(),
+        )
+        return draft_keys | issue_keys
 
     def flush(self) -> None:
         self._session.flush()

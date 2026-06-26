@@ -41,6 +41,8 @@ class Settings(BaseSettings):
     gemini_timeout_seconds: int = Field(default=45, ge=5, le=120)
     gemini_max_attempts: int = Field(default=2, ge=1, le=3)
     ai_prompt_version: str = "civic-report-v1"
+    report_analysis_rate_limit: int = Field(default=10, ge=1, le=100)
+    report_analysis_rate_window_minutes: int = Field(default=60, ge=1, le=1_440)
     report_draft_ttl_minutes: int = Field(default=60, ge=10, le=1_440)
     anonymous_actor_secret: str = Field(default="civicpulse-local-actor-secret", repr=False)
     community_action_rate_limit: int = Field(default=20, ge=1, le=100)
@@ -74,6 +76,8 @@ class Settings(BaseSettings):
     def model_post_init(self, _context: object) -> None:
         if self.app_env == "production" and self.ai_provider == "demo":
             raise ValueError("AI_PROVIDER=demo is not allowed in production")
+        if self.app_env == "production":
+            self._validate_production_cors()
         if self.ai_provider == "gemini" and not self.gemini_api_key:
             raise ValueError("GEMINI_API_KEY is required when AI_PROVIDER=gemini")
         if self.storage_backend == "gcs" and not self.storage_bucket:
@@ -90,6 +94,21 @@ class Settings(BaseSettings):
             and self.admin_session_secret == "civicpulse-local-session-secret"
         ):
             raise ValueError("ADMIN_SESSION_SECRET must be changed in production")
+
+    def _validate_production_cors(self) -> None:
+        if not self.cors_origins:
+            raise ValueError("CORS_ORIGINS must contain at least one production origin")
+        for origin in self.cors_origins:
+            normalized = origin.lower()
+            if (
+                normalized == "*"
+                or normalized.startswith("http://")
+                or "localhost" in normalized
+                or "127.0.0.1" in normalized
+            ):
+                raise ValueError(
+                    "CORS_ORIGINS must use explicit HTTPS production origins in production",
+                )
 
 
 @lru_cache

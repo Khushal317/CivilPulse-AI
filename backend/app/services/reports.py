@@ -219,7 +219,10 @@ class ReportService:
 
     @staticmethod
     def _ensure_not_expired(draft: IssueDraft) -> None:
-        if draft.expires_at <= now_utc():
+        expires_at = draft.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        if expires_at <= now_utc():
             raise AppError(
                 code="draft_expired",
                 message="This report draft has expired. Please analyze the report again.",

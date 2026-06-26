@@ -23,6 +23,10 @@ class ImageStorage(Protocol):
 
     def delete(self, key: str) -> None: ...
 
+    def list_keys(self, prefix: str = "issues/", limit: int = 500) -> list[str]: ...
+
+    def health_check(self) -> None: ...
+
 
 class LocalImageStorage:
     def __init__(self, root: Path) -> None:
@@ -49,10 +53,17 @@ class LocalImageStorage:
     def save(self, data: bytes, mime_type: str, extension: str) -> StoredImage:
         key = f"issues/{uuid.uuid4().hex}{extension}"
         path = self._path_for_key(key)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = path.with_suffix(f"{path.suffix}.tmp")
-        temporary.write_bytes(data)
-        temporary.replace(path)
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = path.with_suffix(f"{path.suffix}.{uuid.uuid4().hex}.tmp")
+            temporary.write_bytes(data)
+            temporary.replace(path)
+        except OSError as exc:
+            raise AppError(
+                code="storage_unavailable",
+                message="The image could not be stored right now. Please try again.",
+                status_code=503,
+            ) from exc
         return StoredImage(key=key, mime_type=mime_type)
 
     def read(self, key: str) -> bytes:
@@ -63,11 +74,49 @@ class LocalImageStorage:
                 message="The image was not found.",
                 status_code=404,
             )
-        return path.read_bytes()
+        try:
+            return path.read_bytes()
+        except OSError as exc:
+            raise AppError(
+                code="storage_unavailable",
+                message="The image could not be loaded right now. Please try again.",
+                status_code=503,
+            ) from exc
 
     def delete(self, key: str) -> None:
         path = self._path_for_key(key)
-        path.unlink(missing_ok=True)
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            raise AppError(
+                code="storage_unavailable",
+                message="The image could not be removed right now. Please try again.",
+                status_code=503,
+            ) from exc
+
+    def list_keys(self, prefix: str = "issues/", limit: int = 500) -> list[str]:
+        prefix_path = self._path_for_key(prefix)
+        if not prefix_path.exists():
+            return []
+        keys: list[str] = []
+        for path in sorted(prefix_path.rglob("*")):
+            if path.is_file():
+                keys.append(path.relative_to(self._root).as_posix())
+            if len(keys) >= limit:
+                break
+        return keys
+
+    def health_check(self) -> None:
+        probe = self._root / f".civicpulse-health-{uuid.uuid4().hex}.tmp"
+        try:
+            probe.write_bytes(b"ok")
+            probe.unlink(missing_ok=True)
+        except OSError as exc:
+            raise AppError(
+                code="storage_unavailable",
+                message="Image storage is unavailable.",
+                status_code=503,
+            ) from exc
 
 
 class GoogleCloudImageStorage:
@@ -77,21 +126,77 @@ class GoogleCloudImageStorage:
     def save(self, data: bytes, mime_type: str, extension: str) -> StoredImage:
         key = f"issues/{uuid.uuid4().hex}{extension}"
         blob = self._bucket.blob(key)
-        blob.upload_from_string(data, content_type=mime_type)
+        try:
+            blob.upload_from_string(data, content_type=mime_type)
+        except Exception as exc:
+            raise AppError(
+                code="storage_unavailable",
+                message="The image could not be stored right now. Please try again.",
+                status_code=503,
+            ) from exc
         return StoredImage(key=key, mime_type=mime_type)
 
     def read(self, key: str) -> bytes:
         blob = self._bucket.blob(key)
-        if not blob.exists():
+        try:
+            exists = blob.exists()
+        except Exception as exc:
+            raise AppError(
+                code="storage_unavailable",
+                message="The image could not be loaded right now. Please try again.",
+                status_code=503,
+            ) from exc
+        if not exists:
             raise AppError(
                 code="image_not_found",
                 message="The image was not found.",
                 status_code=404,
             )
-        return bytes(blob.download_as_bytes())
+        try:
+            return bytes(blob.download_as_bytes())
+        except Exception as exc:
+            raise AppError(
+                code="storage_unavailable",
+                message="The image could not be loaded right now. Please try again.",
+                status_code=503,
+            ) from exc
 
     def delete(self, key: str) -> None:
-        self._bucket.blob(key).delete(if_generation_match=None)
+        try:
+            self._bucket.blob(key).delete(if_generation_match=None)
+        except Exception as exc:
+            raise AppError(
+                code="storage_unavailable",
+                message="The image could not be removed right now. Please try again.",
+                status_code=503,
+            ) from exc
+
+    def list_keys(self, prefix: str = "issues/", limit: int = 500) -> list[str]:
+        try:
+            return [blob.name for blob in self._bucket.list_blobs(prefix=prefix, max_results=limit)]
+        except Exception as exc:
+            raise AppError(
+                code="storage_unavailable",
+                message="Image storage is unavailable.",
+                status_code=503,
+            ) from exc
+
+    def health_check(self) -> None:
+        try:
+            if not self._bucket.exists():
+                raise AppError(
+                    code="storage_unavailable",
+                    message="Image storage is unavailable.",
+                    status_code=503,
+                )
+        except AppError:
+            raise
+        except Exception as exc:
+            raise AppError(
+                code="storage_unavailable",
+                message="Image storage is unavailable.",
+                status_code=503,
+            ) from exc
 
 
 @lru_cache

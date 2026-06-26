@@ -11,10 +11,12 @@ from app.core.errors import AppError
 from app.db.migrations import CURRENT_DATABASE_REVISION
 from app.db.session import get_db_session
 from app.schemas.health import HealthResponse
+from app.services.storage import ImageStorage, get_image_storage
 
 router = APIRouter(prefix="/health", tags=["health"])
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
 DatabaseDependency = Annotated[Session, Depends(get_db_session)]
+StorageDependency = Annotated[ImageStorage, Depends(get_image_storage)]
 
 
 @router.get("/live", response_model=HealthResponse)
@@ -27,7 +29,11 @@ def live(settings: SettingsDependency) -> HealthResponse:
 
 
 @router.get("/ready", response_model=HealthResponse)
-def ready(settings: SettingsDependency, session: DatabaseDependency) -> HealthResponse:
+def ready(
+    settings: SettingsDependency,
+    session: DatabaseDependency,
+    storage: StorageDependency,
+) -> HealthResponse:
     try:
         revision = session.execute(
             text("SELECT version_num FROM alembic_version LIMIT 1"),
@@ -44,6 +50,7 @@ def ready(settings: SettingsDependency, session: DatabaseDependency) -> HealthRe
             message="The database migration revision is not current.",
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
+    storage.health_check()
 
     return HealthResponse(
         status="ready",

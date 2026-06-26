@@ -77,6 +77,7 @@ def current_session(admin: AdminDependency) -> AdminSessionResponse:
 def logout(
     response: Response,
     service: AdminAuthServiceDependency,
+    settings: SettingsDependency,
     raw_token: Annotated[str | None, Cookie(alias=ADMIN_COOKIE_NAME)] = None,
     csrf: Annotated[str | None, Header(alias="X-CSRF-Token")] = None,
 ) -> Response:
@@ -85,6 +86,7 @@ def logout(
         key=ADMIN_COOKIE_NAME,
         path="/",
         httponly=True,
+        secure=settings.app_env == "production",
         samesite="strict",
     )
     response.status_code = status.HTTP_204_NO_CONTENT

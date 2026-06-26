@@ -1,5 +1,18 @@
 from fastapi.testclient import TestClient
 
+from app.core.errors import AppError
+from app.main import app
+from app.services.storage import get_image_storage
+
+
+class FailingStorage:
+    def health_check(self) -> None:
+        raise AppError(
+            code="storage_unavailable",
+            message="Image storage is unavailable.",
+            status_code=503,
+        )
+
 
 def test_live_health_check(client: TestClient) -> None:
     response = client.get("/health/live")
@@ -14,6 +27,15 @@ def test_ready_health_check(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert response.json()["status"] == "ready"
+
+
+def test_ready_health_check_reports_storage_failure(client: TestClient) -> None:
+    app.dependency_overrides[get_image_storage] = lambda: FailingStorage()
+
+    response = client.get("/health/ready")
+
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "storage_unavailable"
 
 
 def test_v1_api_root(client: TestClient) -> None:

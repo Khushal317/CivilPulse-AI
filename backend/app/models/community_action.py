@@ -23,6 +23,7 @@ class CommunityAction(Base):
             name="uq_community_actions_issue_action_actor",
         ),
         Index("ix_community_actions_issue_type", "issue_id", "action_type"),
+        Index("ix_community_actions_actor_created", "actor_hash", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

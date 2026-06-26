@@ -5,7 +5,8 @@ from uuid import UUID, uuid4
 from fastapi.testclient import TestClient
 from PIL import Image
 
-from app.api.dependencies import get_report_service
+from app.api.dependencies import get_report_analysis_rate_limiter, get_report_service
+from app.core.errors import AppError
 from app.domain.enums import IssueCategory, IssueSeverity, IssueStatus, UrgencyLevel
 from app.main import app
 from app.schemas.issues import PublishedReportResponse, ReportDraftResponse, ReportDraftUpdate
@@ -75,6 +76,16 @@ class FakeRouteReportService:
         assert draft_id == self.draft_id
 
 
+class AlwaysLimitedRateLimiter:
+    def hit(self, key: str) -> None:
+        del key
+        raise AppError(
+            code="report_analysis_rate_limited",
+            message="Too many report analyses were requested. Please try again later.",
+            status_code=429,
+        )
+
+
 def test_invalid_image_is_rejected_before_report_service(client: TestClient) -> None:
     service = FakeRouteReportService()
     app.dependency_overrides[get_report_service] = lambda: service
@@ -90,6 +101,25 @@ def test_invalid_image_is_rejected_before_report_service(client: TestClient) -> 
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "invalid_image"
+    assert service.analyze_calls == 0
+
+
+def test_report_analysis_rate_limit_runs_before_analysis(client: TestClient) -> None:
+    service = FakeRouteReportService()
+    app.dependency_overrides[get_report_service] = lambda: service
+    app.dependency_overrides[get_report_analysis_rate_limiter] = lambda: AlwaysLimitedRateLimiter()
+
+    response = client.post(
+        "/api/v1/reports/analyze",
+        data={
+            "original_description": "There is a dangerous pothole near the school.",
+            "location": "Sector 12",
+        },
+        files={"image": ("issue.png", png_bytes(), "image/png")},
+    )
+
+    assert response.status_code == 429
+    assert response.json()["error"]["code"] == "report_analysis_rate_limited"
     assert service.analyze_calls == 0
 
 

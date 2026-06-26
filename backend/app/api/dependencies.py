@@ -1,3 +1,4 @@
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends
@@ -13,6 +14,7 @@ from app.services.admin import AdminService
 from app.services.admin_auth import AdminAuthService, get_login_rate_limiter
 from app.services.ai import CivicIssueAnalyzer, get_civic_issue_analyzer
 from app.services.issues import IssueService
+from app.services.rate_limit import InMemoryRateLimiter
 from app.services.reports import ReportService
 from app.services.storage import ImageStorage, get_image_storage
 
@@ -20,6 +22,31 @@ DatabaseDependency = Annotated[Session, Depends(get_db_session)]
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
 StorageDependency = Annotated[ImageStorage, Depends(get_image_storage)]
 AnalyzerDependency = Annotated[CivicIssueAnalyzer, Depends(get_civic_issue_analyzer)]
+
+
+@lru_cache
+def build_report_analysis_rate_limiter(limit: int, window_minutes: int) -> InMemoryRateLimiter:
+    return InMemoryRateLimiter(
+        limit=limit,
+        window_minutes=window_minutes,
+        code="report_analysis_rate_limited",
+        message="Too many report analyses were requested. Please try again later.",
+    )
+
+
+def get_report_analysis_rate_limiter(
+    settings: SettingsDependency,
+) -> InMemoryRateLimiter:
+    return build_report_analysis_rate_limiter(
+        settings.report_analysis_rate_limit,
+        settings.report_analysis_rate_window_minutes,
+    )
+
+
+ReportAnalysisRateLimiterDependency = Annotated[
+    InMemoryRateLimiter,
+    Depends(get_report_analysis_rate_limiter),
+]
 
 
 def get_report_service(

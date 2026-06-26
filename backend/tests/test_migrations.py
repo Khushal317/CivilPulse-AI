@@ -59,20 +59,27 @@ def test_initial_migration_generates_downgrade_sql(
 
 
 @pytest.mark.postgres
-def test_upgrade_and_downgrade_on_postgresql() -> None:
+def test_upgrade_and_downgrade_on_postgresql(monkeypatch: pytest.MonkeyPatch) -> None:
     database_url = os.getenv("TEST_DATABASE_URL")
     if database_url is None:
         pytest.skip("TEST_DATABASE_URL is not configured")
     if "_test" not in database_url:
         pytest.fail("TEST_DATABASE_URL must point to a dedicated database containing '_test'")
+    monkeypatch.setenv("DATABASE_URL", database_url)
 
     config = alembic_config(database_url)
-    engine = create_engine(database_url)
 
     command.downgrade(config, "base")
     command.upgrade(config, "head")
-    assert set(inspect(engine).get_table_names()) >= EXPECTED_TABLES
+    engine = create_engine(database_url)
+    try:
+        assert set(inspect(engine).get_table_names()) >= EXPECTED_TABLES
+    finally:
+        engine.dispose()
 
     command.downgrade(config, "base")
-    assert not (EXPECTED_TABLES - {"alembic_version"}) & set(inspect(engine).get_table_names())
-    engine.dispose()
+    engine = create_engine(database_url)
+    try:
+        assert not (EXPECTED_TABLES - {"alembic_version"}) & set(inspect(engine).get_table_names())
+    finally:
+        engine.dispose()

@@ -4,6 +4,7 @@ from typing import Any
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
 from starlette import status
 
 from app.core.request_context import get_request_id
@@ -67,5 +68,15 @@ def register_exception_handlers(app: FastAPI) -> None:
                 code="validation_error",
                 message="The request contains invalid data.",
                 details=details,
+            ),
+        )
+
+    @app.exception_handler(SQLAlchemyError)
+    async def handle_database_error(_request: Request, _exc: SQLAlchemyError) -> JSONResponse:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content=error_payload(
+                code="database_unavailable",
+                message="The database is unavailable. Please try again later.",
             ),
         )

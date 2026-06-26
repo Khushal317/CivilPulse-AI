@@ -19,6 +19,8 @@ class Issue(TimestampMixin, Base):
         Index("ix_issues_tracker_newest", "status", "created_at"),
         Index("ix_issues_category_severity", "category", "severity"),
         Index("ix_issues_location_search", "location"),
+        Index("ix_issues_admin_updated", "updated_at", "id"),
+        Index("ix_issues_priority_queue", "severity", "status", "created_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

@@ -11,6 +11,7 @@ from app.models.issue_draft import IssueDraft
 from app.repositories.reports import ReportRepository
 from app.schemas.issues import AIAnalysis, AIReportInput, ReportAnalysisInput, ReportDraftUpdate
 from app.services.ai import CivicIssueAnalyzer
+from app.services.cleanup import ReportCleanupService
 from app.services.images import ValidatedImage
 from app.services.reports import ReportService
 from app.services.storage import ImageStorage, StoredImage
@@ -32,6 +33,12 @@ class FakeStorage(ImageStorage):
     def delete(self, key: str) -> None:
         self.deleted.append(key)
         self.files.pop(key, None)
+
+    def list_keys(self, prefix: str = "issues/", limit: int = 500) -> list[str]:
+        return [key for key in sorted(self.files) if key.startswith(prefix)][:limit]
+
+    def health_check(self) -> None:
+        return None
 
 
 class FakeAnalyzer(CivicIssueAnalyzer):
@@ -101,6 +108,23 @@ class FakeReportRepository(ReportRepository):
 
     def find_issue_by_image_key(self, image_key: str) -> Issue | None:
         return self.issues.get(image_key)
+
+    def expired_unpublished_drafts(
+        self,
+        cutoff: datetime,
+        *,
+        limit: int,
+    ) -> list[IssueDraft]:
+        return [
+            draft
+            for draft in sorted(self.drafts.values(), key=lambda item: item.expires_at)
+            if draft.published_at is None and draft.expires_at <= cutoff
+        ][:limit]
+
+    def existing_image_keys(self, image_keys: set[str]) -> set[str]:
+        draft_keys = {draft.image_key for draft in self.drafts.values()}
+        issue_keys = set(self.issues)
+        return image_keys & (draft_keys | issue_keys)
 
     def flush(self) -> None:
         return None
@@ -213,3 +237,60 @@ def test_cancel_removes_draft_and_image(
 
     assert draft.id not in repository.drafts
     assert storage.deleted == ["issues/test.png"]
+
+
+def test_cleanup_removes_expired_unpublished_drafts_and_images(
+    report_input: ReportAnalysisInput,
+    image: ValidatedImage,
+) -> None:
+    service, repository, storage = build_service()
+    expired = service.analyze(report_input, image)
+    repository.drafts[expired.id].expires_at = datetime.now(UTC) - timedelta(minutes=5)
+
+    result = ReportCleanupService(repository, storage).cleanup_abandoned_drafts()
+
+    assert result.abandoned_drafts == 1
+    assert result.abandoned_images == 1
+    assert repository.drafts == {}
+    assert storage.deleted == ["issues/test.png"]
+
+
+def test_cleanup_removes_unused_images_but_keeps_referenced_images() -> None:
+    repository = FakeReportRepository()
+    storage = FakeStorage()
+    storage.files = {
+        "issues/referenced.png": b"keep",
+        "issues/orphan.png": b"remove",
+    }
+    repository.issues["issues/referenced.png"] = Issue(
+        id=uuid.uuid4(),
+        public_reference="CP-20260625-ABCDEF12",
+        title="Referenced issue image",
+        original_description="A referenced public issue.",
+        ai_summary="A referenced public issue summary.",
+        category=IssueCategory.ROAD_DAMAGE,
+        severity=IssueSeverity.MEDIUM,
+        urgency_level=UrgencyLevel.SOON,
+        urgency_reason="Routine maintenance should inspect it.",
+        suggested_department="Public Works",
+        safety_risk="Use caution nearby.",
+        citizen_explanation="The issue is published.",
+        suggested_next_action="Track the issue publicly.",
+        location="Sector 12",
+        landmark=None,
+        image_key="issues/referenced.png",
+        image_mime="image/png",
+        status=IssueStatus.REPORTED,
+        citizen_name=None,
+        citizen_contact=None,
+        ai_model="test",
+        prompt_version="test",
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+
+    result = ReportCleanupService(repository, storage).cleanup_unused_images()
+
+    assert result.unused_images == 1
+    assert "issues/referenced.png" in storage.files
+    assert "issues/orphan.png" not in storage.files

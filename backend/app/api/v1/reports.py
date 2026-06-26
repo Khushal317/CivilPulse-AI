@@ -2,10 +2,15 @@ from pathlib import PurePosixPath
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, File, Form, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, Request, Response, UploadFile, status
 from pydantic import ValidationError
 
-from app.api.dependencies import ReportServiceDependency, SettingsDependency, StorageDependency
+from app.api.dependencies import (
+    ReportAnalysisRateLimiterDependency,
+    ReportServiceDependency,
+    SettingsDependency,
+    StorageDependency,
+)
 from app.core.errors import AppError
 from app.domain.enums import IssueCategory
 from app.schemas.issues import (
@@ -26,8 +31,10 @@ media_router = APIRouter(prefix="/media", tags=["media"])
     status_code=status.HTTP_201_CREATED,
 )
 async def analyze_report(
+    request: Request,
     service: ReportServiceDependency,
     settings: SettingsDependency,
+    rate_limiter: ReportAnalysisRateLimiterDependency,
     image: Annotated[UploadFile, File(description="One JPEG, PNG, or WebP issue photo")],
     original_description: Annotated[str, Form(min_length=10, max_length=4_000)],
     location: Annotated[str, Form(min_length=2, max_length=255)],
@@ -37,6 +44,8 @@ async def analyze_report(
     citizen_contact: Annotated[str | None, Form(max_length=255)] = None,
     urgency_note: Annotated[str | None, Form(max_length=1_000)] = None,
 ) -> ReportDraftResponse:
+    client_key = request.client.host if request.client else "unknown"
+    rate_limiter.hit(client_key)
     data = await image.read(settings.max_image_size_bytes + 1)
     validated_image = validate_image(data, settings)
     try:
@@ -118,5 +127,9 @@ def get_report_image(key: str, storage: StorageDependency) -> Response:
     return Response(
         content=storage.read(key),
         media_type=mime_type,
-        headers={"Cache-Control": "public, max-age=3600"},
+        headers={
+            "Cache-Control": "public, max-age=3600",
+            "Content-Disposition": "inline; filename=civicpulse-issue-image",
+            "X-Content-Type-Options": "nosniff",
+        },
     )

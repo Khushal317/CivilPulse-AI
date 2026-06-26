@@ -141,6 +141,7 @@ Gemini.
 
 ## Current Phase
 
-Phase 8 adds the production-style public landing page, responsive navigation,
-footer, metadata, favicon, social preview metadata, 404/error states, and clear
-AI plus government-affiliation disclaimers.
+Phase 10 adds testing and acceptance coverage: backend Gemini/provider failure
+tests, a full pothole-near-school service acceptance flow, frontend route-level
+acceptance coverage, PostgreSQL migration checks, production build verification,
+and live browser smoke notes in `docs/testing-acceptance.md`.
