@@ -9,11 +9,14 @@ from app.db.session import get_db_session
 from app.repositories.admin import SQLAlchemyAdminSessionRepository
 from app.repositories.admin_issues import SQLAlchemyAdminIssueRepository
 from app.repositories.issues import SQLAlchemyIssueRepository
+from app.repositories.operations import SQLAlchemyOperationsRepository
 from app.repositories.reports import SQLAlchemyReportRepository
 from app.services.admin import AdminService
 from app.services.admin_auth import AdminAuthService, get_login_rate_limiter
 from app.services.ai import CivicIssueAnalyzer, get_civic_issue_analyzer
 from app.services.issues import IssueService
+from app.services.operations import OperationsService
+from app.services.operations_ai import CivicOperationsAnalyzer, get_civic_operations_analyzer
 from app.services.rate_limit import InMemoryRateLimiter
 from app.services.reports import ReportService
 from app.services.storage import ImageStorage, get_image_storage
@@ -22,6 +25,10 @@ DatabaseDependency = Annotated[Session, Depends(get_db_session)]
 SettingsDependency = Annotated[Settings, Depends(get_settings)]
 StorageDependency = Annotated[ImageStorage, Depends(get_image_storage)]
 AnalyzerDependency = Annotated[CivicIssueAnalyzer, Depends(get_civic_issue_analyzer)]
+OperationsAnalyzerDependency = Annotated[
+    CivicOperationsAnalyzer,
+    Depends(get_civic_operations_analyzer),
+]
 
 
 @lru_cache
@@ -98,3 +105,16 @@ def get_admin_service(session: DatabaseDependency) -> AdminService:
 
 
 AdminServiceDependency = Annotated[AdminService, Depends(get_admin_service)]
+
+
+def get_operations_service(
+    session: DatabaseDependency,
+    analyzer: OperationsAnalyzerDependency,
+) -> OperationsService:
+    return OperationsService(
+        repository=SQLAlchemyOperationsRepository(session),
+        analyzer=analyzer,
+    )
+
+
+OperationsServiceDependency = Annotated[OperationsService, Depends(get_operations_service)]

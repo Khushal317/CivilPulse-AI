@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 from PIL import Image
@@ -38,7 +39,7 @@ def test_rejects_image_over_limit_before_decoding() -> None:
     assert caught.value.code == "image_too_large"
 
 
-def test_local_storage_generates_safe_names_and_blocks_traversal(tmp_path) -> None:
+def test_local_storage_generates_safe_names_and_blocks_traversal(tmp_path: Path) -> None:
     storage = LocalImageStorage(tmp_path)
 
     stored = storage.save(png_bytes(), "image/png", ".png")
@@ -51,7 +52,7 @@ def test_local_storage_generates_safe_names_and_blocks_traversal(tmp_path) -> No
     assert caught.value.code == "invalid_image_key"
 
 
-def test_local_storage_health_and_listing(tmp_path) -> None:
+def test_local_storage_health_and_listing(tmp_path: Path) -> None:
     storage = LocalImageStorage(tmp_path)
     first = storage.save(b"one", "image/png", ".png")
     second = storage.save(b"two", "image/png", ".png")

@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 
 from PIL import Image
 from sqlalchemy import create_engine
@@ -58,7 +59,7 @@ def png_bytes() -> bytes:
     return output.getvalue()
 
 
-def test_complete_pothole_near_school_acceptance_flow(tmp_path) -> None:
+def test_complete_pothole_near_school_acceptance_flow(tmp_path: Path) -> None:
     engine = create_engine("sqlite+pysqlite:///:memory:")
     Base.metadata.create_all(engine)
     settings = Settings(

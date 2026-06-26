@@ -6,6 +6,7 @@ import type {
   AdminIssueListResponse,
   AdminSession,
   AdminStatusUpdate,
+  OperationsReport,
 } from "./types";
 
 export function loginAdmin(username: string, password: string): Promise<AdminSession> {
@@ -61,5 +62,20 @@ export function updateAdminIssueStatus(
     method: "POST",
     headers: { "X-CSRF-Token": csrfToken },
     body: { ...update },
+  });
+}
+
+export function getLatestOperationsReport(
+  signal?: AbortSignal,
+): Promise<OperationsReport | null> {
+  return apiRequest<OperationsReport | null>("/api/v1/admin/operations/latest", {
+    signal,
+  });
+}
+
+export function analyzeOperationsReport(csrfToken: string): Promise<OperationsReport> {
+  return apiRequest<OperationsReport>("/api/v1/admin/operations/analyze", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
   });
 }

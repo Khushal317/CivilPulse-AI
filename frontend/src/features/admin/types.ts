@@ -82,3 +82,78 @@ export interface AdminStatusUpdate {
   note?: string;
   rejection_reason?: string;
 }
+
+export type OperationsRiskLevel = "low" | "medium" | "high" | "critical";
+
+export interface OperationsUrgentIssue {
+  issue_id: string;
+  public_reference: string;
+  title: string;
+  location: string;
+  department: string;
+  severity: IssueSeverity;
+  priority_reason: string;
+  recommended_action: string;
+  suggested_time_window: string;
+}
+
+export interface OperationsDuplicateIssue {
+  issue_id: string;
+  public_reference: string;
+  title: string;
+}
+
+export interface OperationsDuplicateCluster {
+  cluster_title: string;
+  issues: OperationsDuplicateIssue[];
+  reason: string;
+  recommended_action: string;
+}
+
+export interface OperationsAreaHotspot {
+  area: string;
+  issue_count: number;
+  main_categories: IssueCategory[];
+  risk_level: OperationsRiskLevel;
+  insight: string;
+}
+
+export interface OperationsDepartmentPriority {
+  department: string;
+  open_issues: number;
+  high_priority_count: number;
+  recommended_focus: string;
+}
+
+export interface OperationsEscalationMessage {
+  department: string;
+  issue_id: string;
+  public_reference: string;
+  issue_title: string;
+  message: string;
+}
+
+export interface OperationsPredictedRisk {
+  issue_id: string;
+  public_reference: string;
+  issue_title: string;
+  risk: string;
+  risk_level: OperationsRiskLevel;
+  preventive_action: string;
+}
+
+export interface OperationsReport {
+  id: string;
+  generated_at: string;
+  created_at: string;
+  total_issues_analyzed: number;
+  model_used: string;
+  executive_summary: string;
+  urgent_issues: OperationsUrgentIssue[];
+  duplicate_clusters: OperationsDuplicateCluster[];
+  area_hotspots: OperationsAreaHotspot[];
+  department_priorities: OperationsDepartmentPriority[];
+  escalation_messages: OperationsEscalationMessage[];
+  predicted_risks: OperationsPredictedRisk[];
+  raw_response: Record<string, unknown>;
+}

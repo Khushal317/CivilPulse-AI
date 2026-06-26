@@ -28,7 +28,7 @@ def test_core_tables_are_registered() -> None:
 
 def test_all_tables_compile_for_postgresql() -> None:
     for table in Base.metadata.sorted_tables:
-        sql = str(CreateTable(table).compile(dialect=postgresql.dialect()))
+        sql = str(CreateTable(table).compile(dialect=postgresql.dialect()))  # type: ignore[no-untyped-call]
         assert f"CREATE TABLE {table.name}" in sql
 
 

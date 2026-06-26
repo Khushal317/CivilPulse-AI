@@ -6,6 +6,7 @@ from fastapi import APIRouter, Cookie, Depends, Header, Query, Request, Response
 from app.api.dependencies import (
     AdminAuthServiceDependency,
     AdminServiceDependency,
+    OperationsServiceDependency,
     SettingsDependency,
 )
 from app.domain.enums import IssueCategory, IssueSeverity, IssueStatus
@@ -18,6 +19,7 @@ from app.schemas.admin import (
     AdminSessionResponse,
     AdminStatusUpdateRequest,
 )
+from app.schemas.operations import OperationsReportResponse
 from app.services.admin_auth import ADMIN_COOKIE_NAME, AuthenticatedAdmin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -141,3 +143,19 @@ def update_issue_status(
     _admin: AdminCSRFDependency,
 ) -> AdminIssueDetail:
     return service.update_status(issue_id, update)
+
+
+@router.post("/operations/analyze", response_model=OperationsReportResponse)
+def analyze_operations(
+    service: OperationsServiceDependency,
+    _admin: AdminCSRFDependency,
+) -> OperationsReportResponse:
+    return service.analyze_active_issues()
+
+
+@router.get("/operations/latest", response_model=OperationsReportResponse | None)
+def latest_operations_report(
+    service: OperationsServiceDependency,
+    _admin: AdminDependency,
+) -> OperationsReportResponse | None:
+    return service.latest_report()

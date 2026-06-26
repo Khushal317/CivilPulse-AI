@@ -6,7 +6,6 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.domain.enums import IssueCategory
 from app.schemas.issues import AIReportInput
-from app.services import ai
 from app.services.ai import GeminiCivicIssueAnalyzer
 
 
@@ -66,7 +65,7 @@ class FakeGenAIClient:
 
 @pytest.fixture(autouse=True)
 def fake_gemini_client(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(ai.genai, "Client", FakeGenAIClient)
+    monkeypatch.setattr("app.services.ai.genai.Client", FakeGenAIClient)
 
 
 def settings() -> Settings:

@@ -1,11 +1,15 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { createMemoryRouter, RouterProvider } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { NotificationProvider } from "../src/app/notifications";
-import { appRoutes } from "../src/routes/router";
+import { IssueDetailPage } from "../src/features/issues/IssueDetailPage";
+import { TrackerPage } from "../src/features/issues/TrackerPage";
+import { ReportPage } from "../src/features/reports/ReportPage";
+import { ReportReviewPage } from "../src/features/reports/ReportReviewPage";
+import { PublicLayout } from "../src/layouts/PublicLayout";
 import { createTestQueryClient } from "./test-utils";
 
 const draftId = "11111111-1111-4111-8111-111111111111";
@@ -117,18 +121,22 @@ function routePath(input: RequestInfo | URL): string {
 }
 
 function renderApp(initialPath = "/report") {
-  const router = createMemoryRouter(appRoutes, { initialEntries: [initialPath] });
-
-  return {
-    router,
-    ...render(
-      <QueryClientProvider client={createTestQueryClient()}>
-        <NotificationProvider>
-          <RouterProvider router={router} />
-        </NotificationProvider>
-      </QueryClientProvider>,
-    ),
-  };
+  return render(
+    <QueryClientProvider client={createTestQueryClient()}>
+      <NotificationProvider>
+        <MemoryRouter initialEntries={[initialPath]}>
+          <Routes>
+            <Route element={<PublicLayout />}>
+              <Route element={<ReportPage />} path="/report" />
+              <Route element={<ReportReviewPage />} path="/report/review/:draftId" />
+              <Route element={<TrackerPage />} path="/issues" />
+              <Route element={<IssueDetailPage />} path="/issues/:issueId" />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </NotificationProvider>
+    </QueryClientProvider>,
+  );
 }
 
 afterEach(() => {

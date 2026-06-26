@@ -35,6 +35,85 @@ const issueSummary = {
   updated_at: "2026-06-25T10:00:00Z",
   verification_count: 3,
 };
+const operationsReport = {
+  id: "33333333-3333-4333-8333-333333333333",
+  generated_at: "2026-06-26T10:30:00Z",
+  created_at: "2026-06-26T10:30:00Z",
+  total_issues_analyzed: 2,
+  model_used: "demo-civic-operations-agent-v1",
+  executive_summary: "Two active civic issues need administrator attention.",
+  urgent_issues: [
+    {
+      issue_id: issueId,
+      public_reference: "CP-20260625-00000001",
+      title: "Pothole near school",
+      location: "Sector 12, near City School",
+      department: "Public Works",
+      severity: "high",
+      priority_reason: "High severity and multiple community confirmations.",
+      recommended_action: "Inspect and temporarily barricade the area.",
+      suggested_time_window: "Within 24 hours",
+    },
+  ],
+  duplicate_clusters: [
+    {
+      cluster_title: "Possible school-zone road duplicates",
+      issues: [
+        {
+          issue_id: issueId,
+          public_reference: "CP-20260625-00000001",
+          title: "Pothole near school",
+        },
+        {
+          issue_id: "44444444-4444-4444-8444-444444444444",
+          public_reference: "CP-20260625-00000002",
+          title: "Road crater near City School",
+        },
+      ],
+      reason: "Both reports describe nearby road damage.",
+      recommended_action: "Review together before dispatching duplicate crews.",
+    },
+  ],
+  area_hotspots: [
+    {
+      area: "Sector 12",
+      issue_count: 2,
+      main_categories: ["road_damage"],
+      risk_level: "high",
+      insight: "Sector 12 has repeated road safety reports.",
+    },
+  ],
+  department_priorities: [
+    {
+      department: "Public Works",
+      open_issues: 2,
+      high_priority_count: 1,
+      recommended_focus: "Prioritize school-zone hazards first.",
+    },
+  ],
+  escalation_messages: [
+    {
+      department: "Public Works",
+      issue_id: issueId,
+      public_reference: "CP-20260625-00000001",
+      issue_title: "Pothole near school",
+      message: "Please inspect CP-20260625-00000001 near City School.",
+    },
+  ],
+  predicted_risks: [
+    {
+      issue_id: issueId,
+      public_reference: "CP-20260625-00000001",
+      issue_title: "Pothole near school",
+      risk: "If ignored, riders may be injured.",
+      risk_level: "high",
+      preventive_action: "Barricade and inspect the road surface.",
+    },
+  ],
+  raw_response: {
+    executive_summary: "Two active civic issues need administrator attention.",
+  },
+};
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -169,6 +248,7 @@ describe("administrator workflow", () => {
             }),
           );
         }
+        if (url.includes("/operations/latest")) return Promise.resolve(jsonResponse(null));
         return Promise.resolve(jsonResponse({}));
       }),
     );
@@ -182,6 +262,69 @@ describe("administrator workflow", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("15")).toBeInTheDocument();
     expect(screen.getAllByText("Pothole near school")).toHaveLength(2);
+  });
+
+  it("generates an operations report and copies an escalation draft", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+    const fetchMock = vi.fn().mockImplementation(
+      (input: RequestInfo | URL, options?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes("/auth/session")) return Promise.resolve(jsonResponse(session));
+        if (url.includes("/dashboard")) {
+          return Promise.resolve(
+            jsonResponse({
+              metrics: {
+                total_reports: 15,
+                high_severity: 8,
+                verified: 5,
+                pending: 10,
+                resolved: 3,
+              },
+              category_breakdown: [{ category: "road_damage", count: 5 }],
+              latest_reports: [issueSummary],
+              priority_issues: [issueSummary],
+            }),
+          );
+        }
+        if (url.includes("/operations/latest")) return Promise.resolve(jsonResponse(null));
+        if (url.includes("/operations/analyze") && options?.method === "POST") {
+          expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
+          return Promise.resolve(jsonResponse(operationsReport));
+        }
+        return Promise.resolve(jsonResponse({}));
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderRoute("/admin");
+
+    expect(await screen.findByRole("heading", { name: "Analyze active city issues" }))
+      .toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Analyze City Issues" }));
+
+    expect(await screen.findByRole("heading", { name: "Executive summary" }))
+      .toBeInTheDocument();
+    expect(screen.getByText("Two active civic issues need administrator attention."))
+      .toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "Open issue" })[0]).toHaveAttribute(
+      "href",
+      `/admin/issues/${issueId}`,
+    );
+    expect(screen.getByText("Possible school-zone road duplicates")).toBeInTheDocument();
+    expect(screen.getByText("Sector 12 has repeated road safety reports.")).toBeInTheDocument();
+    expect(screen.getByText("Prioritize school-zone hazards first.")).toBeInTheDocument();
+    expect(screen.getByText("If ignored, riders may be injured.")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Copy message" }));
+
+    expect(writeText).toHaveBeenCalledWith(
+      "Please inspect CP-20260625-00000001 near City School.",
+    );
+    expect(await screen.findByText("Message copied")).toBeInTheDocument();
   });
 
   it("shows private details and confirms a rejection with CSRF", async () => {
