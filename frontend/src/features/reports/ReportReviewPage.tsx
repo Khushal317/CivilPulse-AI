@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import type { z } from "zod";
 
 import { ApiError } from "../../api/client";
+import { Seo } from "../../components/Seo";
 import { ErrorState } from "../../components/feedback/ErrorState";
 import { Spinner } from "../../components/feedback/Loading";
 import { CategoryBadge, SeverityBadge, StatusBadge } from "../../components/ui/Badge";
@@ -111,6 +112,7 @@ export function ReportReviewPage() {
   if (!draftId) {
     return (
       <section className="page-section">
+        <Seo title="Review unavailable" />
         <div className="container narrow">
           <ErrorState title="The report draft link is incomplete" />
         </div>
@@ -121,6 +123,7 @@ export function ReportReviewPage() {
   if (draftQuery.isPending) {
     return (
       <section className="page-section">
+        <Seo title="Review report" />
         <div className="container narrow">
           <Spinner label="Loading AI review…" />
         </div>
@@ -132,6 +135,7 @@ export function ReportReviewPage() {
     const expired = draftQuery.error instanceof ApiError && draftQuery.error.code === "draft_expired";
     return (
       <section className="page-section">
+        <Seo title={expired ? "Draft expired" : "Review unavailable"} />
         <div className="container narrow">
           <ErrorState
             description={
@@ -155,6 +159,10 @@ export function ReportReviewPage() {
   if (published) {
     return (
       <section className="page-section publication-success">
+        <Seo
+          description="Your CivicPulse AI report has been published to the public tracker."
+          title="Report published"
+        />
         <div className="container narrow">
           <Card padding="large">
             <span className="success-mark" aria-hidden="true">
@@ -186,6 +194,10 @@ export function ReportReviewPage() {
   const requestError = save.error ?? publish.error ?? cancel.error;
   return (
     <section className="page-section review-page">
+      <Seo
+        description="Review and edit the AI-structured civic issue before publishing it to the public tracker."
+        title="Review report"
+      />
       <div className="container review-layout">
         <div className="review-heading">
           <div>

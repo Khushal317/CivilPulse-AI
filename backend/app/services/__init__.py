@@ -1,3 +1,3 @@
-from app.services.issues import IssueReader
+from app.services.issues import IssueService
 
-__all__ = ["IssueReader"]
+__all__ = ["IssueService"]

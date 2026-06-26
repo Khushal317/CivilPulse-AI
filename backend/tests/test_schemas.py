@@ -46,6 +46,7 @@ def test_issue_list_item_validates_domain_values() -> None:
         severity=IssueSeverity.HIGH,
         location="Sector 12",
         landmark="City Public School",
+        image_url="/api/v1/media/issues/pothole.jpg",
         status=IssueStatus.REPORTED,
         created_at=datetime.now(UTC),
         updated_at=datetime.now(UTC),

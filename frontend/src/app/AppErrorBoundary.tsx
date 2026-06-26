@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 
+import { Seo } from "../components/Seo";
 import { ErrorState } from "../components/feedback/ErrorState";
 
 interface AppErrorBoundaryProps {
@@ -32,6 +33,10 @@ export class AppErrorBoundary extends Component<
     if (this.state.hasError) {
       return (
         <main className="page-section">
+          <Seo
+            description="CivicPulse AI hit an unexpected application error."
+            title="Application error"
+          />
           <div className="container narrow">
             <ErrorState
               description="The page encountered an unexpected problem. Try restoring the application."
@@ -46,4 +51,3 @@ export class AppErrorBoundary extends Component<
     return this.props.children;
   }
 }
-

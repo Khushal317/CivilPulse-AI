@@ -1,11 +1,17 @@
 import { createBrowserRouter, type RouteObject } from "react-router-dom";
 
 import { AdminLayout } from "../layouts/AdminLayout";
+import { AdminDashboardPage } from "../features/admin/AdminDashboardPage";
+import { AdminIssueDetailPage } from "../features/admin/AdminIssueDetailPage";
+import { AdminIssuesPage } from "../features/admin/AdminIssuesPage";
+import { AdminLoginPage } from "../features/admin/AdminLoginPage";
+import { IssueDetailPage } from "../features/issues/IssueDetailPage";
+import { TrackerPage } from "../features/issues/TrackerPage";
 import { ReportPage } from "../features/reports/ReportPage";
 import { ReportReviewPage } from "../features/reports/ReportReviewPage";
 import { PublicLayout } from "../layouts/PublicLayout";
 import { HomePage } from "../pages/HomePage";
-import { PlaceholderPage } from "../pages/PlaceholderPage";
+import { NotFoundPage } from "../pages/NotFoundPage";
 import { RouteErrorPage } from "../pages/RouteErrorPage";
 
 export const appRoutes: RouteObject[] = [
@@ -24,16 +30,19 @@ export const appRoutes: RouteObject[] = [
       },
       {
         path: "issues",
-        element: (
-          <PlaceholderPage
-            eyebrow="Public transparency"
-            title="Public issue tracker"
-            description="Filtering, search, issue cards, and pagination will be implemented in Phase 5."
-          />
-        ),
+        element: <TrackerPage />,
       },
-      { path: "*", element: <RouteErrorPage /> },
+      {
+        path: "issues/:issueId",
+        element: <IssueDetailPage />,
+      },
+      { path: "*", element: <NotFoundPage /> },
     ],
+  },
+  {
+    path: "/admin/login",
+    element: <AdminLoginPage />,
+    errorElement: <RouteErrorPage />,
   },
   {
     path: "/admin",
@@ -42,23 +51,15 @@ export const appRoutes: RouteObject[] = [
     children: [
       {
         index: true,
-        element: (
-          <PlaceholderPage
-            eyebrow="Issue management"
-            title="Administrator dashboard"
-            description="Dashboard metrics and secure management tools will be implemented in Phase 7."
-          />
-        ),
+        element: <AdminDashboardPage />,
       },
       {
         path: "issues",
-        element: (
-          <PlaceholderPage
-            eyebrow="Admin issue queue"
-            title="Manage reported issues"
-            description="Filtering, status updates, and public notes will be implemented in Phase 7."
-          />
-        ),
+        element: <AdminIssuesPage />,
+      },
+      {
+        path: "issues/:issueId",
+        element: <AdminIssueDetailPage />,
       },
     ],
   },

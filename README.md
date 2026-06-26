@@ -74,6 +74,33 @@ cd backend
 
 `/health/live` confirms the API process is running. `/health/ready` returns success only when PostgreSQL is reachable and its Alembic revision matches the application.
 
+To load idempotent Phase 5 demo data after Docker is running:
+
+```bash
+docker compose exec backend python -m scripts.seed_demo
+```
+
+Then open <http://localhost:5173/issues>. Re-running the command does not
+duplicate the seeded reports.
+
+## Administrator Access
+
+Phase 7 adds a protected administrator workspace at
+<http://localhost:5173/admin>. Before starting the app, configure
+`ADMIN_USERNAME`, `ADMIN_PASSWORD_HASH`, and `ADMIN_SESSION_SECRET` in `.env`.
+
+Generate a password hash without storing the plaintext password:
+
+```bash
+cd backend
+.venv/bin/python -m scripts.hash_admin_password
+```
+
+Copy the complete single-quoted output into `.env`; the quotes prevent Docker
+Compose from interpreting the `$` separators. See
+`docs/admin-dashboard.md` for the session model, authorization boundary, and
+issue-management workflow.
+
 ## Quality Checks
 
 ```bash
@@ -103,8 +130,17 @@ can use `STORAGE_BACKEND=gcs` with `STORAGE_BUCKET` configured. See
 `docs/reporting-workflow.md` for the request lifecycle, privacy boundary, and
 failure behavior.
 
+The Gemini API key is used only when a citizen presses **Analyze with AI** on
+the report form and `AI_PROVIDER=gemini`. FastAPI sends Gemini the uploaded
+issue image, description, location, landmark, optional category, and urgency
+note. Gemini returns the structured title, summary, category, severity,
+urgency, department, safety risk, explanation, and suggested next action.
+Citizen name and contact information are excluded. The tracker, issue detail
+pages, community signals, status promotion, and admin workflows do not call
+Gemini.
+
 ## Current Phase
 
-Phase 4 implements the private report draft workflow: validated image upload,
-AI-assisted structuring, citizen review and editing, cancellation, draft expiry,
-and idempotent publication with an initial Reported timeline entry.
+Phase 8 adds the production-style public landing page, responsive navigation,
+footer, metadata, favicon, social preview metadata, 404/error states, and clear
+AI plus government-affiliation disclaimers.

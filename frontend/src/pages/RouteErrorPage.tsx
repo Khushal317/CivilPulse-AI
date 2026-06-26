@@ -1,5 +1,6 @@
 import { isRouteErrorResponse, Link, useRouteError } from "react-router-dom";
 
+import { Seo } from "../components/Seo";
 import { ErrorState } from "../components/feedback/ErrorState";
 import { buttonClassName } from "../components/ui/buttonStyles";
 
@@ -9,6 +10,10 @@ export function RouteErrorPage() {
 
   return (
     <main className="page-section">
+      <Seo
+        description="CivicPulse AI could not load this page. Return home or try again."
+        title={notFound ? "Page not found" : "Page unavailable"}
+      />
       <div className="container narrow">
         <ErrorState
           description={

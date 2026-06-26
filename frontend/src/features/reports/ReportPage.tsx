@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
 import { ErrorState } from "../../components/feedback/ErrorState";
+import { Seo } from "../../components/Seo";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { SelectField, TextAreaField, TextField } from "../../components/ui/FormField";
@@ -52,6 +53,10 @@ export function ReportPage() {
 
   return (
     <section className="page-section report-page">
+      <Seo
+        description="Submit a photo, location, and description so CivicPulse AI can structure a public civic issue for review."
+        title="Report an issue"
+      />
       <div className="container report-layout">
         <div className="report-heading">
           <p className="eyebrow">Citizen reporting</p>

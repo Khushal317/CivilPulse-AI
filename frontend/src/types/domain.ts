@@ -17,3 +17,10 @@ export type IssueStatus =
   | "resolved"
   | "rejected";
 
+export type IssueSort = "newest" | "oldest" | "most_verified" | "severity";
+
+export type CommunityActionType =
+  | "saw_this_too"
+  | "still_unresolved"
+  | "fixed"
+  | "incorrect";

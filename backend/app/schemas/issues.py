@@ -7,6 +7,7 @@ from app.domain.enums import (
     CommunityActionType,
     IssueCategory,
     IssueSeverity,
+    IssueSort,
     IssueStatus,
     UpdateActorType,
     UrgencyLevel,
@@ -121,10 +122,29 @@ class IssueListItem(APIModel):
     severity: IssueSeverity
     location: str
     landmark: str | None
+    image_url: str
     status: IssueStatus
     created_at: datetime
     updated_at: datetime
     verification_count: int = Field(default=0, ge=0)
+
+
+class IssueListQuery(APIModel):
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=12, ge=1, le=50)
+    category: IssueCategory | None = None
+    severity: IssueSeverity | None = None
+    status: IssueStatus | None = None
+    location: str | None = Field(default=None, max_length=255)
+    sort: IssueSort = IssueSort.NEWEST
+
+
+class IssueListResponse(APIModel):
+    items: list[IssueListItem]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=50)
+    total_items: int = Field(ge=0)
+    total_pages: int = Field(ge=0)
 
 
 class IssuePublicDetail(IssueListItem):
@@ -139,6 +159,15 @@ class IssuePublicDetail(IssueListItem):
     image_url: str
     community_counts: CommunityCounts
     updates: list[IssueUpdatePublic]
+    viewer_actions: list[CommunityActionType] = Field(default_factory=list)
+
+
+class CommunityActionResponse(APIModel):
+    action_type: CommunityActionType
+    accepted: bool
+    issue_status: IssueStatus
+    community_counts: CommunityCounts
+    viewer_actions: list[CommunityActionType]
 
 
 class IssueAdminDetail(IssuePublicDetail):

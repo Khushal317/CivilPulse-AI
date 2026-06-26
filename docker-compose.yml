@@ -22,6 +22,8 @@ services:
     build:
       context: ./backend
       target: development
+    env_file:
+      - .env
     environment:
       APP_ENV: development
       API_RELOAD: "true"

@@ -10,6 +10,10 @@ Object.defineProperty(URL, "revokeObjectURL", {
   configurable: true,
   value: vi.fn(),
 });
+Object.defineProperty(window, "scrollTo", {
+  configurable: true,
+  value: vi.fn(),
+});
 
 afterEach(() => {
   cleanup();

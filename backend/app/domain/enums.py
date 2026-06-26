@@ -44,3 +44,10 @@ class CommunityActionType(StrEnum):
 class UpdateActorType(StrEnum):
     SYSTEM = "system"
     ADMIN = "admin"
+
+
+class IssueSort(StrEnum):
+    NEWEST = "newest"
+    OLDEST = "oldest"
+    MOST_VERIFIED = "most_verified"
+    SEVERITY = "severity"

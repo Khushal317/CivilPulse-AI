@@ -27,10 +27,15 @@ describe("HomePage", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: "Your city has problems. Now they can’t disappear.",
+        name: "Report local problems. Verify with your community. Track until resolved.",
       }),
     ).toBeInTheDocument();
-    expect(await screen.findByText("Connected · v0.1.0")).toBeInTheDocument();
-    expect(screen.getByText("Phase 4 · AI-assisted reporting")).toBeInTheDocument();
+    expect(await screen.findByText("Connected")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", {
+        name: "Three simple steps, one public trail.",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Independent transparency tool/i)).toBeInTheDocument();
   });
 });

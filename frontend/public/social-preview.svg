@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" role="img" aria-label="CivicPulse AI preview">
+  <rect width="1200" height="630" fill="#f5f7f4"/>
+  <circle cx="1000" cy="100" r="220" fill="#e3f1e7"/>
+  <circle cx="180" cy="520" r="180" fill="#fff2d2"/>
+  <rect x="86" y="86" width="1028" height="458" rx="42" fill="#ffffff" stroke="#dce4dd" stroke-width="4"/>
+  <rect x="136" y="138" width="82" height="82" rx="22" fill="#17643c"/>
+  <text x="177" y="188" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="800" text-anchor="middle">CP</text>
+  <text x="250" y="180" fill="#17211b" font-family="Inter, Arial, sans-serif" font-size="42" font-weight="800">CivicPulse AI</text>
+  <text x="136" y="298" fill="#17211b" font-family="Inter, Arial, sans-serif" font-size="66" font-weight="850">Report. Verify. Track.</text>
+  <text x="136" y="374" fill="#5c685f" font-family="Inter, Arial, sans-serif" font-size="34">A community-verified public tracker for local civic issues.</text>
+  <rect x="136" y="432" width="220" height="58" rx="18" fill="#17643c"/>
+  <text x="246" y="470" fill="#ffffff" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="750" text-anchor="middle">Start reporting</text>
+  <rect x="386" y="432" width="230" height="58" rx="18" fill="#eef3ef"/>
+  <text x="501" y="470" fill="#17211b" font-family="Inter, Arial, sans-serif" font-size="24" font-weight="750" text-anchor="middle">View tracker</text>
+</svg>

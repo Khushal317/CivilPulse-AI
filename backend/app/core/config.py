@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     api_port: int = 8000
     api_reload: bool = False
     log_level: str = "INFO"
-    cors_origins: tuple[str, ...] = (
+    cors_origins: Annotated[tuple[str, ...], NoDecode] = (
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     )
@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     gemini_max_attempts: int = Field(default=2, ge=1, le=3)
     ai_prompt_version: str = "civic-report-v1"
     report_draft_ttl_minutes: int = Field(default=60, ge=10, le=1_440)
+    anonymous_actor_secret: str = Field(default="civicpulse-local-actor-secret", repr=False)
+    community_action_rate_limit: int = Field(default=20, ge=1, le=100)
+    community_action_rate_window_minutes: int = Field(default=60, ge=1, le=1_440)
+    admin_username: str = "admin"
+    admin_password_hash: str | None = Field(default=None, repr=False)
+    admin_session_secret: str = Field(default="civicpulse-local-session-secret", repr=False)
+    admin_session_ttl_minutes: int = Field(default=480, ge=15, le=10_080)
+    admin_login_rate_limit: int = Field(default=5, ge=1, le=50)
+    admin_login_rate_window_minutes: int = Field(default=15, ge=1, le=1_440)
     max_image_size_bytes: int = Field(default=10 * 1024 * 1024, ge=1_048_576)
     max_image_pixels: int = Field(default=40_000_000, ge=1_000_000)
     storage_backend: Literal["local", "gcs"] = "local"
@@ -69,6 +78,18 @@ class Settings(BaseSettings):
             raise ValueError("GEMINI_API_KEY is required when AI_PROVIDER=gemini")
         if self.storage_backend == "gcs" and not self.storage_bucket:
             raise ValueError("STORAGE_BUCKET is required when STORAGE_BACKEND=gcs")
+        if (
+            self.app_env == "production"
+            and self.anonymous_actor_secret == "civicpulse-local-actor-secret"
+        ):
+            raise ValueError("ANONYMOUS_ACTOR_SECRET must be changed in production")
+        if self.app_env == "production" and not self.admin_password_hash:
+            raise ValueError("ADMIN_PASSWORD_HASH is required in production")
+        if (
+            self.app_env == "production"
+            and self.admin_session_secret == "civicpulse-local-session-secret"
+        ):
+            raise ValueError("ADMIN_SESSION_SECRET must be changed in production")
 
 
 @lru_cache
