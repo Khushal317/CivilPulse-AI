@@ -6,6 +6,8 @@ from fastapi import APIRouter, Cookie, Depends, Header, Query, Request, Response
 from app.api.dependencies import (
     AdminAuthServiceDependency,
     AdminServiceDependency,
+    MissionGenerationServiceDependency,
+    MissionServiceDependency,
     OperationsServiceDependency,
     SettingsDependency,
 )
@@ -19,6 +21,7 @@ from app.schemas.admin import (
     AdminSessionResponse,
     AdminStatusUpdateRequest,
 )
+from app.schemas.missions import AdminMissionListResponse, MissionDetail, MissionGenerationResponse
 from app.schemas.operations import OperationsReportResponse
 from app.services.admin_auth import ADMIN_COOKIE_NAME, AuthenticatedAdmin
 
@@ -151,6 +154,49 @@ def analyze_operations(
     _admin: AdminCSRFDependency,
 ) -> OperationsReportResponse:
     return service.analyze_active_issues()
+
+
+@router.post("/missions/generate", response_model=MissionGenerationResponse)
+def generate_mission_drafts(
+    service: MissionGenerationServiceDependency,
+    _admin: AdminCSRFDependency,
+) -> MissionGenerationResponse:
+    return service.generate_drafts()
+
+
+@router.get("/missions", response_model=AdminMissionListResponse)
+def list_admin_missions(
+    service: MissionServiceDependency,
+    _admin: AdminDependency,
+) -> AdminMissionListResponse:
+    return service.list_admin()
+
+
+@router.post("/missions/{mission_id}/publish", response_model=MissionDetail)
+def publish_mission(
+    mission_id: UUID,
+    service: MissionServiceDependency,
+    _admin: AdminCSRFDependency,
+) -> MissionDetail:
+    return service.publish(mission_id)
+
+
+@router.post("/missions/{mission_id}/expire", response_model=MissionDetail)
+def expire_mission(
+    mission_id: UUID,
+    service: MissionServiceDependency,
+    _admin: AdminCSRFDependency,
+) -> MissionDetail:
+    return service.expire(mission_id)
+
+
+@router.post("/missions/{mission_id}/complete", response_model=MissionDetail)
+def complete_mission(
+    mission_id: UUID,
+    service: MissionServiceDependency,
+    _admin: AdminCSRFDependency,
+) -> MissionDetail:
+    return service.complete(mission_id)
 
 
 @router.get("/operations/latest", response_model=OperationsReportResponse | None)

@@ -4,10 +4,13 @@ import type {
   AdminIssueDetail,
   AdminIssueFilters,
   AdminIssueListResponse,
+  AdminMissionListResponse,
   AdminSession,
   AdminStatusUpdate,
+  MissionGenerationResponse,
   OperationsReport,
 } from "./types";
+import type { MissionDetail } from "../missions/types";
 
 export function loginAdmin(username: string, password: string): Promise<AdminSession> {
   return apiRequest<AdminSession>("/api/v1/admin/auth/login", {
@@ -75,6 +78,40 @@ export function getLatestOperationsReport(
 
 export function analyzeOperationsReport(csrfToken: string): Promise<OperationsReport> {
   return apiRequest<OperationsReport>("/api/v1/admin/operations/analyze", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
+export function generateMissionDrafts(
+  csrfToken: string,
+): Promise<MissionGenerationResponse> {
+  return apiRequest<MissionGenerationResponse>("/api/v1/admin/missions/generate", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
+export function getAdminMissions(signal?: AbortSignal): Promise<AdminMissionListResponse> {
+  return apiRequest<AdminMissionListResponse>("/api/v1/admin/missions", { signal });
+}
+
+export function publishMission(missionId: string, csrfToken: string): Promise<MissionDetail> {
+  return apiRequest<MissionDetail>(`/api/v1/admin/missions/${missionId}/publish`, {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
+export function expireMission(missionId: string, csrfToken: string): Promise<MissionDetail> {
+  return apiRequest<MissionDetail>(`/api/v1/admin/missions/${missionId}/expire`, {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
+export function completeMission(missionId: string, csrfToken: string): Promise<MissionDetail> {
+  return apiRequest<MissionDetail>(`/api/v1/admin/missions/${missionId}/complete`, {
     method: "POST",
     headers: { "X-CSRF-Token": csrfToken },
   });

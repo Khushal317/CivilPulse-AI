@@ -2,10 +2,10 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 
 from app.domain.enums import IssueCategory
-from app.domain.missions import MissionStatus, MissionType
+from app.domain.missions import MissionActionType, MissionStatus, MissionType
 from app.schemas.common import APIModel
 
 
@@ -28,6 +28,7 @@ class MissionSummary(APIModel):
     category: IssueCategory | None
     reward: dict[str, Any] = Field(default_factory=dict)
     ai_reason: str
+    joined_count: int = Field(default=0, ge=0)
     expires_at: datetime | None
     published_at: datetime | None
     completed_at: datetime | None
@@ -52,7 +53,56 @@ class MissionSummary(APIModel):
 
 class MissionDetail(MissionSummary):
     linked_issue_ids: list[UUID] = Field(default_factory=list)
+    viewer_actions: list[MissionActionType] = Field(default_factory=list)
 
 
 class MissionListResponse(APIModel):
     items: list[MissionSummary]
+
+
+class MissionActionCreate(APIModel):
+    action_type: MissionActionType
+    issue_id: UUID | None = None
+
+
+class MissionActionResponse(APIModel):
+    action_type: MissionActionType
+    accepted: bool
+    mission_status: MissionStatus
+    progress_count: int = Field(ge=0)
+    target_count: int = Field(gt=0)
+    joined_count: int = Field(ge=0)
+    viewer_actions: list[MissionActionType]
+
+
+class AdminMissionListResponse(APIModel):
+    drafts: list[MissionDetail]
+    active: list[MissionDetail]
+    completed: list[MissionDetail]
+    expired: list[MissionDetail]
+
+
+class GeneratedMissionCandidate(APIModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(min_length=8, max_length=180)
+    area_id: UUID
+    mission_type: MissionType
+    goal_description: str = Field(min_length=20, max_length=700)
+    target_count: int = Field(ge=1, le=500)
+    category: IssueCategory | None = None
+    reward: dict[str, Any] = Field(default_factory=dict)
+    ai_reason: str = Field(min_length=20, max_length=900)
+    linked_issue_ids: list[UUID] = Field(default_factory=list, max_length=10)
+    expires_in_days: int = Field(default=7, ge=1, le=30)
+
+
+class MissionGenerationPayload(APIModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    missions: list[GeneratedMissionCandidate] = Field(min_length=1, max_length=5)
+
+
+class MissionGenerationResponse(APIModel):
+    model_used: str
+    created_drafts: list[MissionDetail]

@@ -5,9 +5,11 @@ from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_mission_service
 from app.domain.enums import IssueCategory
-from app.domain.missions import MissionStatus, MissionType
+from app.domain.missions import MissionActionType, MissionStatus, MissionType
 from app.main import app
 from app.schemas.missions import (
+    MissionActionCreate,
+    MissionActionResponse,
     MissionAreaSummary,
     MissionDetail,
     MissionListResponse,
@@ -49,15 +51,40 @@ def mission_summary() -> MissionSummary:
 class FakeMissionService:
     def __init__(self) -> None:
         self.mission_id: UUID | None = None
+        self.actor_hash: str | None = None
+        self.action: MissionActionCreate | None = None
 
     def list_public(self) -> MissionListResponse:
         return MissionListResponse(items=[mission_summary()])
 
-    def get_public_detail(self, mission_id: UUID) -> MissionDetail:
+    def get_public_detail(self, mission_id: UUID, actor_hash: str | None = None) -> MissionDetail:
         self.mission_id = mission_id
+        self.actor_hash = actor_hash
         return MissionDetail(
             **mission_summary().model_dump(),
             linked_issue_ids=[UUID(int=10)],
+            viewer_actions=[MissionActionType.JOINED] if actor_hash else [],
+        )
+
+    def submit_action(
+        self,
+        mission_id: UUID,
+        action_type: MissionActionType,
+        actor_hash: str,
+        *,
+        issue_id: UUID | None = None,
+    ) -> MissionActionResponse:
+        self.mission_id = mission_id
+        self.actor_hash = actor_hash
+        self.action = MissionActionCreate(action_type=action_type, issue_id=issue_id)
+        return MissionActionResponse(
+            action_type=action_type,
+            accepted=True,
+            mission_status=MissionStatus.ACTIVE,
+            progress_count=3,
+            target_count=5,
+            joined_count=1,
+            viewer_actions=[action_type],
         )
 
 
@@ -82,4 +109,30 @@ def test_public_mission_detail_route(client: TestClient) -> None:
 
     assert response.status_code == 200
     assert service.mission_id == UUID(int=2)
+    assert service.actor_hash is not None
+    assert len(service.actor_hash) == 64
     assert response.json()["linked_issue_ids"] == ["00000000-0000-0000-0000-00000000000a"]
+    assert response.json()["viewer_actions"] == ["joined"]
+
+
+def test_public_mission_action_route_uses_anonymous_actor(client: TestClient) -> None:
+    service = FakeMissionService()
+    app.dependency_overrides[get_mission_service] = lambda: service
+
+    response = client.post(
+        "/api/v1/missions/00000000-0000-0000-0000-000000000002/actions",
+        json={
+            "action_type": "verified_issue",
+            "issue_id": "00000000-0000-0000-0000-00000000000a",
+        },
+    )
+
+    assert response.status_code == 200
+    assert service.mission_id == UUID(int=2)
+    assert service.actor_hash is not None
+    assert len(service.actor_hash) == 64
+    assert service.action is not None
+    assert service.action.action_type is MissionActionType.VERIFIED_ISSUE
+    assert response.json()["accepted"] is True
+    assert response.json()["progress_count"] == 3
+    assert "civicpulse_actor" in response.headers["set-cookie"]

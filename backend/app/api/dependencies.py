@@ -18,6 +18,11 @@ from app.services.admin_auth import AdminAuthService, get_login_rate_limiter
 from app.services.ai import CivicIssueAnalyzer, get_civic_issue_analyzer
 from app.services.areas import AreaService
 from app.services.issues import IssueService
+from app.services.mission_generation import (
+    CivicMissionGenerator,
+    MissionGenerationService,
+    get_civic_mission_generator,
+)
 from app.services.missions import MissionService
 from app.services.operations import OperationsService
 from app.services.operations_ai import CivicOperationsAnalyzer, get_civic_operations_analyzer
@@ -32,6 +37,10 @@ AnalyzerDependency = Annotated[CivicIssueAnalyzer, Depends(get_civic_issue_analy
 OperationsAnalyzerDependency = Annotated[
     CivicOperationsAnalyzer,
     Depends(get_civic_operations_analyzer),
+]
+MissionGeneratorDependency = Annotated[
+    CivicMissionGenerator,
+    Depends(get_civic_mission_generator),
 ]
 
 
@@ -128,6 +137,22 @@ def get_mission_service(session: DatabaseDependency) -> MissionService:
 
 
 MissionServiceDependency = Annotated[MissionService, Depends(get_mission_service)]
+
+
+def get_mission_generation_service(
+    session: DatabaseDependency,
+    generator: MissionGeneratorDependency,
+) -> MissionGenerationService:
+    return MissionGenerationService(
+        repository=SQLAlchemyMissionRepository(session),
+        generator=generator,
+    )
+
+
+MissionGenerationServiceDependency = Annotated[
+    MissionGenerationService,
+    Depends(get_mission_generation_service),
+]
 
 
 def get_operations_service(

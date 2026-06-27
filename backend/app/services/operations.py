@@ -53,20 +53,22 @@ def _json_dict(analysis: OperationsAnalysis, field_name: str) -> dict[str, Any]:
 
 
 def report_response(report: CivicOperationsReport) -> OperationsReportResponse:
-    return OperationsReportResponse(
-        id=report.id,
-        generated_at=report.generated_at,
-        created_at=report.created_at,
-        total_issues_analyzed=report.total_issues_analyzed,
-        model_used=report.model_used,
-        executive_summary=report.executive_summary,
-        urgent_issues=report.urgent_issues_json,
-        duplicate_clusters=report.duplicate_clusters_json,
-        area_hotspots=report.area_hotspots_json,
-        department_priorities=report.department_priorities_json,
-        escalation_messages=report.escalation_messages_json,
-        predicted_risks=report.predicted_risks_json,
-        raw_response=report.raw_response_json,
+    return OperationsReportResponse.model_validate(
+        {
+            "id": report.id,
+            "generated_at": report.generated_at,
+            "created_at": report.created_at,
+            "total_issues_analyzed": report.total_issues_analyzed,
+            "model_used": report.model_used,
+            "executive_summary": report.executive_summary,
+            "urgent_issues": report.urgent_issues_json,
+            "duplicate_clusters": report.duplicate_clusters_json,
+            "area_hotspots": report.area_hotspots_json,
+            "department_priorities": report.department_priorities_json,
+            "escalation_messages": report.escalation_messages_json,
+            "predicted_risks": report.predicted_risks_json,
+            "raw_response": report.raw_response_json,
+        },
     )
 
 

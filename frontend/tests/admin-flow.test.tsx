@@ -114,6 +114,57 @@ const operationsReport = {
     executive_summary: "Two active civic issues need administrator attention.",
   },
 };
+const missionDraft = {
+  id: "55555555-5555-4555-8555-555555555555",
+  title: "Verify Sector 12 streetlights",
+  mission_type: "verification",
+  status: "draft",
+  area: {
+    id: "66666666-6666-4666-8666-666666666666",
+    name: "Sector 12",
+    slug: "civicpulse-city-sector-12",
+    city: "CivicPulse City",
+  },
+  goal_description: "Ask residents to safely confirm public streetlights are working.",
+  target_count: 5,
+  progress_count: 0,
+  category: "streetlight",
+  reward: { points: 20, score_key: "participation" },
+  ai_reason: "A verified streetlight report needs additional safe observations.",
+  joined_count: 0,
+  expires_at: "2026-07-04T10:00:00Z",
+  published_at: null,
+  completed_at: null,
+  created_at: "2026-06-27T10:00:00Z",
+  updated_at: "2026-06-27T10:00:00Z",
+  linked_issue_ids: [issueId],
+  viewer_actions: [],
+};
+const activeMission = {
+  ...missionDraft,
+  id: "77777777-7777-4777-8777-777777777777",
+  status: "active",
+  progress_count: 2,
+  published_at: "2026-06-27T11:00:00Z",
+};
+const completedMission = {
+  ...activeMission,
+  id: "88888888-8888-4888-8888-888888888888",
+  status: "completed",
+  progress_count: 5,
+  completed_at: "2026-06-28T11:00:00Z",
+};
+const expiredMission = {
+  ...activeMission,
+  id: "99999999-9999-4999-8999-999999999999",
+  status: "expired",
+};
+const missionConsole = {
+  drafts: [missionDraft],
+  active: [activeMission],
+  completed: [completedMission],
+  expired: [expiredMission],
+};
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -249,6 +300,7 @@ describe("administrator workflow", () => {
           );
         }
         if (url.includes("/operations/latest")) return Promise.resolve(jsonResponse(null));
+        if (url.includes("/admin/missions")) return Promise.resolve(jsonResponse(missionConsole));
         return Promise.resolve(jsonResponse({}));
       }),
     );
@@ -292,6 +344,7 @@ describe("administrator workflow", () => {
           );
         }
         if (url.includes("/operations/latest")) return Promise.resolve(jsonResponse(null));
+        if (url.includes("/admin/missions")) return Promise.resolve(jsonResponse(missionConsole));
         if (url.includes("/operations/analyze") && options?.method === "POST") {
           expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
           return Promise.resolve(jsonResponse(operationsReport));
@@ -352,6 +405,7 @@ describe("administrator workflow", () => {
           expect(options?.method).toBeUndefined();
           return Promise.resolve(jsonResponse(operationsReport));
         }
+        if (url.includes("/admin/missions")) return Promise.resolve(jsonResponse(missionConsole));
         if (url.includes("/operations/analyze")) {
           return Promise.resolve(jsonResponse({ error: { message: "Should not analyze" } }, 500));
         }
@@ -369,6 +423,88 @@ describe("administrator workflow", () => {
     expect(fetchMock).not.toHaveBeenCalledWith(
       expect.stringContaining("/operations/analyze"),
       expect.anything(),
+    );
+  });
+
+  it("manages draft and active missions from the admin console", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation(
+      (input: RequestInfo | URL, options?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes("/auth/session")) return Promise.resolve(jsonResponse(session));
+        if (url.includes("/dashboard")) {
+          return Promise.resolve(
+            jsonResponse({
+              metrics: {
+                total_reports: 15,
+                high_severity: 8,
+                verified: 5,
+                pending: 10,
+                resolved: 3,
+              },
+              category_breakdown: [{ category: "road_damage", count: 5 }],
+              latest_reports: [issueSummary],
+              priority_issues: [issueSummary],
+            }),
+          );
+        }
+        if (url.includes("/operations/latest")) return Promise.resolve(jsonResponse(null));
+        if (url.includes("/missions/generate") && options?.method === "POST") {
+          expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
+          return Promise.resolve(
+            jsonResponse({
+              model_used: "demo-civic-mission-generator-v1",
+              created_drafts: [missionDraft],
+            }),
+          );
+        }
+        if (url.includes(`/missions/${missionDraft.id}/publish`) && options?.method === "POST") {
+          expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
+          return Promise.resolve(jsonResponse({ ...missionDraft, status: "active" }));
+        }
+        if (url.includes(`/missions/${activeMission.id}/expire`) && options?.method === "POST") {
+          expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
+          return Promise.resolve(jsonResponse({ ...activeMission, status: "expired" }));
+        }
+        if (url.includes(`/missions/${activeMission.id}/complete`) && options?.method === "POST") {
+          expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
+          return Promise.resolve(jsonResponse(completedMission));
+        }
+        if (url.includes("/admin/missions")) return Promise.resolve(jsonResponse(missionConsole));
+        return Promise.resolve(jsonResponse({}));
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderRoute("/admin");
+
+    expect(await screen.findByRole("heading", { name: "Review and publish community missions" }))
+      .toBeInTheDocument();
+    expect(await screen.findByText("Draft mission review")).toBeInTheDocument();
+    expect(screen.getByText("Active missions")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Generate Community Missions" }));
+    expect(await screen.findByText("Mission drafts created")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Publish mission" }));
+    expect(await screen.findByText("Mission published")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Expire mission" }));
+    expect(await screen.findByText("Mission expired")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Mark complete" }));
+    expect(await screen.findByText("Mission completed")).toBeInTheDocument();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/admin/missions/${missionDraft.id}/publish`),
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/admin/missions/${activeMission.id}/expire`),
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/admin/missions/${activeMission.id}/complete`),
+      expect.objectContaining({ method: "POST" }),
     );
   });
 

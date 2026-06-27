@@ -9,6 +9,7 @@ import { buttonClassName } from "../../components/ui/buttonStyles";
 import { Card } from "../../components/ui/Card";
 import { getAdminDashboard } from "./api";
 import { AdminIssueTable } from "./AdminIssueTable";
+import { MissionGeneratorPanel } from "./MissionGeneratorPanel";
 import { OperationsAgentPanel } from "./OperationsAgentPanel";
 
 const metricLabels = {
@@ -74,6 +75,7 @@ export function AdminDashboardPage() {
       </div>
 
       <OperationsAgentPanel />
+      <MissionGeneratorPanel />
 
       <div className="admin-dashboard-grid">
         <Card padding="large">

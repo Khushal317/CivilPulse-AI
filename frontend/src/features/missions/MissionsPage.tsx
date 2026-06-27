@@ -36,6 +36,7 @@ function MissionCard({ mission }: { mission: MissionSummary }) {
         <span>
           {mission.progress_count}/{mission.target_count} progress
         </span>
+        <span>{mission.joined_count} joined</span>
         <Link to={`/neighborhoods/${mission.area.slug}`}>{mission.area.name}</Link>
       </div>
       <p className="admin-muted">{mission.ai_reason}</p>

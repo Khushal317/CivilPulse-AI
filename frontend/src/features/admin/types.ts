@@ -8,6 +8,7 @@ import type {
   PublicIssueUpdate,
   UrgencyLevel,
 } from "../issues/types";
+import type { MissionDetail } from "../missions/types";
 
 export interface AdminSession {
   username: string;
@@ -156,4 +157,16 @@ export interface OperationsReport {
   escalation_messages: OperationsEscalationMessage[];
   predicted_risks: OperationsPredictedRisk[];
   raw_response: Record<string, unknown>;
+}
+
+export interface MissionGenerationResponse {
+  model_used: string;
+  created_drafts: MissionDetail[];
+}
+
+export interface AdminMissionListResponse {
+  drafts: MissionDetail[];
+  active: MissionDetail[];
+  completed: MissionDetail[];
+  expired: MissionDetail[];
 }

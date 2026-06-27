@@ -6,11 +6,14 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import (
     get_admin_auth_service,
     get_admin_service,
+    get_mission_generation_service,
+    get_mission_service,
     get_operations_service,
 )
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.domain.enums import IssueCategory, IssueSeverity, IssueStatus
+from app.domain.missions import MissionStatus, MissionType
 from app.main import app
 from app.models.admin_session import AdminSession
 from app.repositories.admin import AdminSessionRepository
@@ -25,6 +28,13 @@ from app.schemas.admin import (
     CategoryMetric,
 )
 from app.schemas.issues import CommunityCounts
+from app.schemas.missions import (
+    AdminMissionListResponse,
+    MissionAreaSummary,
+    MissionDetail,
+    MissionGenerationResponse,
+    MissionSummary,
+)
 from app.schemas.operations import OperationsReportResponse
 from app.services.admin_auth import AdminAuthService, LoginRateLimiter
 from app.services.passwords import hash_password
@@ -152,6 +162,77 @@ def operations_report() -> OperationsReportResponse:
     )
 
 
+def mission_generation_response() -> MissionGenerationResponse:
+    now = datetime(2026, 6, 27, 10, tzinfo=UTC)
+    area = MissionAreaSummary(
+        id=UUID(int=30),
+        name="Sector 12",
+        slug="civicpulse-city-sector-12",
+        city="CivicPulse City",
+    )
+    mission = MissionDetail(
+        **MissionSummary(
+            id=UUID(int=31),
+            title="Verify Sector 12 streetlights",
+            mission_type=MissionType.VERIFICATION,
+            status=MissionStatus.DRAFT,
+            area=area,
+            goal_description="Ask residents to safely confirm public streetlights are working.",
+            target_count=5,
+            progress_count=0,
+            category=IssueCategory.STREETLIGHT,
+            reward={"points": 20, "score_key": "participation"},
+            ai_reason="A verified streetlight report needs additional safe observations.",
+            expires_at=now,
+            published_at=None,
+            completed_at=None,
+            created_at=now,
+            updated_at=now,
+        ).model_dump(),
+        linked_issue_ids=[UUID(int=1)],
+    )
+    return MissionGenerationResponse(
+        model_used="demo-civic-mission-generator-v1",
+        created_drafts=[mission],
+    )
+
+
+def route_mission(
+    *,
+    mission_id: UUID | None = None,
+    status: MissionStatus = MissionStatus.DRAFT,
+) -> MissionDetail:
+    now = datetime(2026, 6, 27, 10, tzinfo=UTC)
+    selected_mission_id = mission_id or UUID(int=31)
+    area = MissionAreaSummary(
+        id=UUID(int=30),
+        name="Sector 12",
+        slug="civicpulse-city-sector-12",
+        city="CivicPulse City",
+    )
+    return MissionDetail(
+        **MissionSummary(
+            id=selected_mission_id,
+            title="Verify Sector 12 streetlights",
+            mission_type=MissionType.VERIFICATION,
+            status=status,
+            area=area,
+            goal_description="Ask residents to safely confirm public streetlights are working.",
+            target_count=5,
+            progress_count=5 if status is MissionStatus.COMPLETED else 0,
+            category=IssueCategory.STREETLIGHT,
+            reward={"points": 20, "score_key": "participation"},
+            ai_reason="A verified streetlight report needs additional safe observations.",
+            expires_at=now,
+            published_at=None if status is MissionStatus.DRAFT else now,
+            completed_at=now if status is MissionStatus.COMPLETED else None,
+            created_at=now,
+            updated_at=now,
+        ).model_dump(),
+        linked_issue_ids=[UUID(int=1)],
+    )
+
+
 class FakeRouteOperationsService:
     def __init__(
         self,
@@ -182,8 +263,57 @@ class FakeRouteOperationsService:
         return self.latest
 
 
+class FakeRouteMissionGenerationService:
+    def __init__(self, *, fail_generation: bool = False) -> None:
+        self.fail_generation = fail_generation
+        self.generate_calls = 0
+        self.saved_drafts = 0
+
+    def generate_drafts(self) -> MissionGenerationResponse:
+        self.generate_calls += 1
+        if self.fail_generation:
+            raise AppError(
+                code="mission_ai_unavailable",
+                message="The Civic Mission Generator could not create missions right now.",
+                status_code=503,
+            )
+        self.saved_drafts += 1
+        return mission_generation_response()
+
+
+class FakeRouteMissionService:
+    def __init__(self) -> None:
+        self.list_calls = 0
+        self.published: list[UUID] = []
+        self.expired: list[UUID] = []
+        self.completed: list[UUID] = []
+
+    def list_admin(self) -> AdminMissionListResponse:
+        self.list_calls += 1
+        return AdminMissionListResponse(
+            drafts=[route_mission(status=MissionStatus.DRAFT)],
+            active=[route_mission(mission_id=UUID(int=32), status=MissionStatus.ACTIVE)],
+            completed=[route_mission(mission_id=UUID(int=33), status=MissionStatus.COMPLETED)],
+            expired=[route_mission(mission_id=UUID(int=34), status=MissionStatus.EXPIRED)],
+        )
+
+    def publish(self, mission_id: UUID) -> MissionDetail:
+        self.published.append(mission_id)
+        return route_mission(mission_id=mission_id, status=MissionStatus.ACTIVE)
+
+    def expire(self, mission_id: UUID) -> MissionDetail:
+        self.expired.append(mission_id)
+        return route_mission(mission_id=mission_id, status=MissionStatus.EXPIRED)
+
+    def complete(self, mission_id: UUID) -> MissionDetail:
+        self.completed.append(mission_id)
+        return route_mission(mission_id=mission_id, status=MissionStatus.COMPLETED)
+
+
 def configure_admin_overrides(
     operations_service: FakeRouteOperationsService | None = None,
+    mission_generation_service: FakeRouteMissionGenerationService | None = None,
+    mission_service: FakeRouteMissionService | None = None,
 ) -> AdminAuthService:
     auth = AdminAuthService(
         repository=RouteSessionRepository(),
@@ -198,6 +328,12 @@ def configure_admin_overrides(
     app.dependency_overrides[get_admin_service] = lambda: FakeRouteAdminService()
     app.dependency_overrides[get_operations_service] = (
         lambda: operations_service or FakeRouteOperationsService()
+    )
+    app.dependency_overrides[get_mission_generation_service] = (
+        lambda: mission_generation_service or FakeRouteMissionGenerationService()
+    )
+    app.dependency_overrides[get_mission_service] = (
+        lambda: mission_service or FakeRouteMissionService()
     )
     return auth
 
@@ -333,3 +469,101 @@ def test_failed_operations_analysis_returns_safe_error_without_partial_save(
     assert failed.json()["error"]["code"] == "operations_ai_unavailable"
     assert operations_service.analyze_calls == 1
     assert operations_service.saved_reports == 0
+
+
+def test_admin_can_generate_mission_drafts(
+    client: TestClient,
+) -> None:
+    mission_service = FakeRouteMissionGenerationService()
+    configure_admin_overrides(mission_generation_service=mission_service)
+    login = client.post(
+        "/api/v1/admin/auth/login",
+        json={"username": "admin", "password": "route-password"},
+    )
+    csrf = login.json()["csrf_token"]
+
+    missing_csrf = client.post("/api/v1/admin/missions/generate")
+    generated = client.post(
+        "/api/v1/admin/missions/generate",
+        headers={"X-CSRF-Token": csrf},
+    )
+
+    assert missing_csrf.status_code == 403
+    assert generated.status_code == 200
+    body = generated.json()
+    assert body["model_used"] == "demo-civic-mission-generator-v1"
+    assert body["created_drafts"][0]["status"] == "draft"
+    assert body["created_drafts"][0]["published_at"] is None
+    assert mission_service.generate_calls == 1
+    assert mission_service.saved_drafts == 1
+
+
+def test_failed_mission_generation_returns_safe_error_without_partial_save(
+    client: TestClient,
+) -> None:
+    mission_service = FakeRouteMissionGenerationService(fail_generation=True)
+    configure_admin_overrides(mission_generation_service=mission_service)
+    login = client.post(
+        "/api/v1/admin/auth/login",
+        json={"username": "admin", "password": "route-password"},
+    )
+
+    failed = client.post(
+        "/api/v1/admin/missions/generate",
+        headers={"X-CSRF-Token": login.json()["csrf_token"]},
+    )
+
+    assert failed.status_code == 503
+    assert failed.json()["error"]["code"] == "mission_ai_unavailable"
+    assert mission_service.generate_calls == 1
+    assert mission_service.saved_drafts == 0
+
+
+def test_admin_mission_console_requires_admin_and_csrf(client: TestClient) -> None:
+    configure_admin_overrides()
+
+    anonymous_list = client.get("/api/v1/admin/missions")
+    anonymous_publish = client.post(
+        f"/api/v1/admin/missions/{UUID(int=31)}/publish",
+    )
+
+    assert anonymous_list.status_code == 401
+    assert anonymous_publish.status_code == 401
+
+
+def test_admin_can_list_and_manage_missions(client: TestClient) -> None:
+    mission_service = FakeRouteMissionService()
+    configure_admin_overrides(mission_service=mission_service)
+    login = client.post(
+        "/api/v1/admin/auth/login",
+        json={"username": "admin", "password": "route-password"},
+    )
+    csrf = login.json()["csrf_token"]
+
+    listed = client.get("/api/v1/admin/missions")
+    missing_csrf = client.post(f"/api/v1/admin/missions/{UUID(int=31)}/publish")
+    published = client.post(
+        f"/api/v1/admin/missions/{UUID(int=31)}/publish",
+        headers={"X-CSRF-Token": csrf},
+    )
+    expired = client.post(
+        f"/api/v1/admin/missions/{UUID(int=32)}/expire",
+        headers={"X-CSRF-Token": csrf},
+    )
+    completed = client.post(
+        f"/api/v1/admin/missions/{UUID(int=32)}/complete",
+        headers={"X-CSRF-Token": csrf},
+    )
+
+    assert listed.status_code == 200
+    assert listed.json()["drafts"][0]["status"] == "draft"
+    assert listed.json()["active"][0]["status"] == "active"
+    assert listed.json()["completed"][0]["status"] == "completed"
+    assert listed.json()["expired"][0]["status"] == "expired"
+    assert missing_csrf.status_code == 403
+    assert published.json()["status"] == "active"
+    assert expired.json()["status"] == "expired"
+    assert completed.json()["status"] == "completed"
+    assert mission_service.published == [UUID(int=31)]
+    assert mission_service.expired == [UUID(int=32)]
+    assert mission_service.completed == [UUID(int=32)]
