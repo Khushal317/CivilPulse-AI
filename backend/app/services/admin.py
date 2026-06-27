@@ -19,6 +19,7 @@ from app.schemas.admin import (
     CategoryMetric,
 )
 from app.schemas.issues import CommunityCounts, IssueUpdatePublic
+from app.services.areas import AreaScoreTrigger
 
 VALID_TRANSITIONS: dict[IssueStatus, frozenset[IssueStatus]] = {
     IssueStatus.REPORTED: frozenset(
@@ -86,6 +87,7 @@ def summary(record: AdminIssueRecord) -> AdminIssueSummary:
 @dataclass(slots=True)
 class AdminService:
     repository: AdminIssueRepository
+    area_score_trigger: AreaScoreTrigger | None = None
 
     def dashboard(self) -> AdminDashboardResponse:
         counts = self.repository.dashboard_counts()
@@ -156,6 +158,7 @@ class AdminService:
         )
         issue.updates = [*issue.updates, update]
         self.repository.flush()
+        self._recalculate_issue_area(issue, request.to_status)
         return self._detail(issue)
 
     def _detail(self, issue: Issue) -> AdminIssueDetail:
@@ -200,3 +203,16 @@ class AdminService:
             message="The issue was not found.",
             status_code=404,
         )
+
+    def _recalculate_issue_area(self, issue: Issue, to_status: IssueStatus) -> None:
+        if self.area_score_trigger is None:
+            return
+        if to_status is IssueStatus.RESOLVED:
+            event_type = "admin_resolved"
+        elif to_status is IssueStatus.REJECTED:
+            event_type = "admin_rejected"
+        elif to_status is IssueStatus.REPORTED:
+            event_type = "admin_restored"
+        else:
+            return
+        self.area_score_trigger.recalculate_issue_area(issue, event_type=event_type)

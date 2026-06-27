@@ -8,6 +8,8 @@ const navItems = [
   { to: "/report", label: "Report issue", end: false },
   { to: "/issues", label: "Public tracker", end: false },
   { to: "/neighborhoods", label: "Neighborhoods", end: false },
+  { to: "/rankings", label: "Rankings", end: false },
+  { to: "/missions", label: "Missions", end: false },
 ];
 
 export function PublicNavigation() {

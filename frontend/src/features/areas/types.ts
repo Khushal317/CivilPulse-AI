@@ -40,7 +40,20 @@ export interface AreaScoreEvent {
   created_at: string;
 }
 
+export interface AreaActiveIssue {
+  id: string;
+  public_reference: string;
+  title: string;
+  category: string;
+  severity: string;
+  status: string;
+  location: string;
+  landmark: string | null;
+  updated_at: string;
+}
+
 export interface AreaDetail extends AreaSummary {
   total_issues: number;
   recent_score_events: AreaScoreEvent[];
+  active_issues: AreaActiveIssue[];
 }

@@ -128,3 +128,29 @@ def test_area_repository_returns_aggregates(area_session: Session) -> None:
     assert records[0].open_issues == 2
     assert records[0].resolved_this_week == 1
     assert records[0].total_issues == 5
+
+
+def test_area_repository_returns_active_issues_for_detail(area_session: Session) -> None:
+    area = make_area()
+    now = datetime(2026, 6, 27, 10, tzinfo=UTC)
+    area_session.add(area)
+    area_session.add_all(
+        [
+            make_issue(1, area, status=IssueStatus.REPORTED, updated_at=now),
+            make_issue(2, area, status=IssueStatus.IN_PROGRESS, updated_at=now),
+            make_issue(3, area, status=IssueStatus.RESOLVED, updated_at=now),
+            make_issue(4, area, status=IssueStatus.REJECTED, updated_at=now),
+        ],
+    )
+    area_session.commit()
+
+    record = SQLAlchemyAreaRepository(area_session).get_by_slug(
+        area.slug,
+        resolved_since=now - timedelta(days=7),
+    )
+
+    assert record is not None
+    assert [issue.public_reference for issue in record.active_issues or []] == [
+        "CP-20260627-00000002",
+        "CP-20260627-00000001",
+    ]

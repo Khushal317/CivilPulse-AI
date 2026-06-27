@@ -9,9 +9,11 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.domain.areas import BASELINE_AREA_SCORE, DEFAULT_AREA_CITY, area_slug, normalize_area_name
 from app.domain.enums import IssueStatus
+from app.domain.missions import MissionStatus
 from app.models.area import Area
 from app.models.area_score_event import AreaScoreEvent
 from app.models.issue import Issue
+from app.models.mission import Mission
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +24,7 @@ class AreaRecord:
     total_issues: int
     active_missions: int = 0
     recent_score_events: list[AreaScoreEvent] | None = None
+    active_issues: list[Issue] | None = None
 
 
 class AreaRepository(Protocol):
@@ -34,6 +37,8 @@ class AreaRepository(Protocol):
     def list_for_score_recalculation(self) -> list[Area]: ...
 
     def recent_score_events(self, area_id: UUID, *, limit: int) -> list[AreaScoreEvent]: ...
+
+    def active_issues(self, area_id: UUID, *, limit: int) -> list[Issue]: ...
 
     def add_score_event(self, event: AreaScoreEvent) -> AreaScoreEvent: ...
 
@@ -48,8 +53,9 @@ class SQLAlchemyAreaRepository:
         open_count = self._open_issue_count()
         resolved_count = self._resolved_issue_count(resolved_since)
         total_count = func.count(Issue.id).label("total_issues")
+        active_missions = self._active_mission_count()
         rows = self._session.execute(
-            select(Area, open_count, resolved_count, total_count)
+            select(Area, open_count, resolved_count, total_count, active_missions)
             .outerjoin(Issue, Issue.area_id == Area.id)
             .group_by(Area.id)
             .order_by(Area.rank.is_(None), Area.rank.asc(), Area.name.asc()),
@@ -60,29 +66,33 @@ class SQLAlchemyAreaRepository:
                 open_issues=open_issues,
                 resolved_this_week=resolved_this_week,
                 total_issues=total_issues,
+                active_missions=active_missions,
             )
-            for area, open_issues, resolved_this_week, total_issues in rows
+            for area, open_issues, resolved_this_week, total_issues, active_missions in rows
         ]
 
     def get_by_slug(self, slug: str, *, resolved_since: datetime) -> AreaRecord | None:
         open_count = self._open_issue_count()
         resolved_count = self._resolved_issue_count(resolved_since)
         total_count = func.count(Issue.id).label("total_issues")
+        active_missions = self._active_mission_count()
         row = self._session.execute(
-            select(Area, open_count, resolved_count, total_count)
+            select(Area, open_count, resolved_count, total_count, active_missions)
             .outerjoin(Issue, Issue.area_id == Area.id)
             .where(Area.slug == slug)
             .group_by(Area.id),
         ).one_or_none()
         if row is None:
             return None
-        area, open_issues, resolved_this_week, total_issues = row
+        area, open_issues, resolved_this_week, total_issues, active_missions = row
         return AreaRecord(
             area=area,
             open_issues=open_issues,
             resolved_this_week=resolved_this_week,
             total_issues=total_issues,
+            active_missions=active_missions,
             recent_score_events=self.recent_score_events(area.id, limit=8),
+            active_issues=self.active_issues(area.id, limit=6),
         )
 
     def get_for_score_recalculation(self, area_id: UUID) -> Area | None:
@@ -113,6 +123,19 @@ class SQLAlchemyAreaRepository:
                 select(AreaScoreEvent)
                 .where(AreaScoreEvent.area_id == area_id)
                 .order_by(AreaScoreEvent.created_at.desc(), AreaScoreEvent.id.desc())
+                .limit(limit),
+            ).all(),
+        )
+
+    def active_issues(self, area_id: UUID, *, limit: int) -> list[Issue]:
+        return list(
+            self._session.scalars(
+                select(Issue)
+                .where(
+                    Issue.area_id == area_id,
+                    Issue.status.not_in((IssueStatus.RESOLVED, IssueStatus.REJECTED)),
+                )
+                .order_by(Issue.updated_at.desc(), Issue.id.desc())
                 .limit(limit),
             ).all(),
         )
@@ -152,6 +175,20 @@ class SQLAlchemyAreaRepository:
                     ),
                 ),
             ).label("resolved_this_week"),
+        )
+
+    @staticmethod
+    def _active_mission_count() -> ColumnElement[int]:
+        return cast(
+            ColumnElement[int],
+            select(func.count(Mission.id))
+            .where(
+                Mission.area_id == Area.id,
+                Mission.status == MissionStatus.ACTIVE,
+            )
+            .correlate(Area)
+            .scalar_subquery()
+            .label("active_missions"),
         )
 
 

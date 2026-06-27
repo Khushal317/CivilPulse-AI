@@ -230,6 +230,53 @@ def test_recalculate_single_area_ranks_against_all_areas(score_session: Session)
     assert sector.rank == 2
 
 
+def test_recalculate_issue_area_records_trigger_metadata(score_session: Session) -> None:
+    area = make_area(1, "Sector 12")
+    issue = make_issue(1, area, severity=IssueSeverity.CRITICAL)
+    area.issues = [issue]
+    score_session.add(area)
+    score_session.commit()
+
+    AreaService(SQLAlchemyAreaRepository(score_session)).recalculate_issue_area(
+        issue,
+        event_type="issue_published",
+    )
+    score_session.commit()
+
+    events = SQLAlchemyAreaRepository(score_session).recent_score_events(area.id, limit=10)
+    assert events
+    assert {event.event_type for event in events} == {"issue_published"}
+    assert {event.related_issue_id for event in events} == {issue.id}
+    assert all("published" in event.reason for event in events)
+
+
+def test_rejected_issue_reverses_active_penalty_without_positive_score_farming(
+    score_session: Session,
+) -> None:
+    area = make_area(1, "Sector 12")
+    issue = make_issue(1, area, severity=IssueSeverity.CRITICAL)
+    area.issues = [issue]
+    score_session.add(area)
+    score_session.commit()
+    service = AreaService(SQLAlchemyAreaRepository(score_session))
+
+    service.recalculate_issue_area(issue, event_type="issue_published")
+    assert area.infrastructure_score < 70
+    assert area.overall_score < 70
+
+    issue.status = IssueStatus.REJECTED
+    service.recalculate_issue_area(issue, event_type="admin_rejected")
+    score_session.commit()
+
+    assert area.infrastructure_score == 70
+    assert area.safety_score == 70
+    assert area.overall_score == 70
+    events = SQLAlchemyAreaRepository(score_session).recent_score_events(area.id, limit=10)
+    rejection_events = [event for event in events if event.event_type == "admin_rejected"]
+    assert rejection_events
+    assert all(event.new_score <= 70 for event in rejection_events)
+
+
 def test_recalculate_area_scores_missing_area_raises(score_session: Session) -> None:
     service = AreaService(SQLAlchemyAreaRepository(score_session))
 

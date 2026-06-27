@@ -11,6 +11,7 @@ from app.models.area_score_event import AreaScoreEvent
 from app.models.issue import Issue
 from app.repositories.areas import AreaRecord, AreaRepository
 from app.schemas.areas import (
+    AreaActiveIssueResponse,
     AreaDetail,
     AreaListResponse,
     AreaScoreBreakdown,
@@ -81,6 +82,20 @@ def event_response(event: AreaScoreEvent) -> AreaScoreEventResponse:
     return AreaScoreEventResponse.model_validate(event)
 
 
+def active_issue_response(issue: Issue) -> AreaActiveIssueResponse:
+    return AreaActiveIssueResponse(
+        id=issue.id,
+        public_reference=issue.public_reference,
+        title=issue.title,
+        category=issue.category,
+        severity=issue.severity,
+        status=issue.status,
+        location=issue.location,
+        landmark=issue.landmark,
+        updated_at=issue.updated_at,
+    )
+
+
 class AreaScoreTrigger(Protocol):
     def recalculate_issue_area(
         self,
@@ -116,6 +131,7 @@ class AreaService:
             recent_score_events=[
                 event_response(event) for event in record.recent_score_events or []
             ],
+            active_issues=[active_issue_response(issue) for issue in record.active_issues or []],
         )
 
     def recalculate_issue_area(

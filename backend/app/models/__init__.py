@@ -6,6 +6,8 @@ from app.models.community_action import CommunityAction
 from app.models.issue import Issue
 from app.models.issue_draft import IssueDraft
 from app.models.issue_update import IssueUpdate
+from app.models.mission import Mission
+from app.models.mission_action import MissionAction
 
 __all__ = [
     "AdminSession",
@@ -16,4 +18,6 @@ __all__ = [
     "Issue",
     "IssueDraft",
     "IssueUpdate",
+    "Mission",
+    "MissionAction",
 ]

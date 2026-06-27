@@ -10,6 +10,7 @@ from app.repositories.admin import SQLAlchemyAdminSessionRepository
 from app.repositories.admin_issues import SQLAlchemyAdminIssueRepository
 from app.repositories.areas import SQLAlchemyAreaRepository
 from app.repositories.issues import SQLAlchemyIssueRepository
+from app.repositories.missions import SQLAlchemyMissionRepository
 from app.repositories.operations import SQLAlchemyOperationsRepository
 from app.repositories.reports import SQLAlchemyReportRepository
 from app.services.admin import AdminService
@@ -17,6 +18,7 @@ from app.services.admin_auth import AdminAuthService, get_login_rate_limiter
 from app.services.ai import CivicIssueAnalyzer, get_civic_issue_analyzer
 from app.services.areas import AreaService
 from app.services.issues import IssueService
+from app.services.missions import MissionService
 from app.services.operations import OperationsService
 from app.services.operations_ai import CivicOperationsAnalyzer, get_civic_operations_analyzer
 from app.services.rate_limit import InMemoryRateLimiter
@@ -69,6 +71,7 @@ def get_report_service(
         storage=storage,
         analyzer=analyzer,
         settings=settings,
+        area_score_trigger=AreaService(repository=SQLAlchemyAreaRepository(session)),
     )
 
 
@@ -82,6 +85,7 @@ def get_issue_service(
     return IssueService(
         repository=SQLAlchemyIssueRepository(session),
         settings=settings,
+        area_score_trigger=AreaService(repository=SQLAlchemyAreaRepository(session)),
     )
 
 
@@ -103,7 +107,10 @@ AdminAuthServiceDependency = Annotated[AdminAuthService, Depends(get_admin_auth_
 
 
 def get_admin_service(session: DatabaseDependency) -> AdminService:
-    return AdminService(repository=SQLAlchemyAdminIssueRepository(session))
+    return AdminService(
+        repository=SQLAlchemyAdminIssueRepository(session),
+        area_score_trigger=AreaService(repository=SQLAlchemyAreaRepository(session)),
+    )
 
 
 AdminServiceDependency = Annotated[AdminService, Depends(get_admin_service)]
@@ -114,6 +121,13 @@ def get_area_service(session: DatabaseDependency) -> AreaService:
 
 
 AreaServiceDependency = Annotated[AreaService, Depends(get_area_service)]
+
+
+def get_mission_service(session: DatabaseDependency) -> MissionService:
+    return MissionService(repository=SQLAlchemyMissionRepository(session))
+
+
+MissionServiceDependency = Annotated[MissionService, Depends(get_mission_service)]
 
 
 def get_operations_service(

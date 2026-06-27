@@ -87,6 +87,14 @@ class FakeIssueRepository(IssueRepository):
         return None
 
 
+class FakeAreaScoreTrigger:
+    def __init__(self) -> None:
+        self.calls: list[tuple[UUID, IssueStatus, str]] = []
+
+    def recalculate_issue_area(self, issue: Issue, *, event_type: str) -> None:
+        self.calls.append((issue.id, issue.status, event_type))
+
+
 def test_issue_service_builds_public_page_without_private_fields() -> None:
     created_at = datetime(2026, 6, 25, tzinfo=UTC)
     issue = Issue(
@@ -112,6 +120,7 @@ def test_issue_service_builds_public_page_without_private_fields() -> None:
         citizen_contact="private@example.com",
         ai_model="test",
         prompt_version="test",
+        area_id=UUID(int=30),
         created_at=created_at,
         updated_at=created_at,
     )
@@ -219,6 +228,24 @@ def test_fixed_signal_is_advisory_and_does_not_resolve() -> None:
     assert result.accepted is True
     assert result.community_counts.fixed == 1
     assert result.issue_status is IssueStatus.REPORTED
+
+
+def test_accepted_community_actions_trigger_civic_genome_without_duplicate_farming() -> None:
+    issue = make_issue()
+    trigger = FakeAreaScoreTrigger()
+    service = IssueService(FakeIssueRepository(issue), Settings(), area_score_trigger=trigger)
+
+    service.submit_community_action(issue.id, CommunityActionType.SAW_THIS_TOO, "actor-one")
+    service.submit_community_action(issue.id, CommunityActionType.SAW_THIS_TOO, "actor-one")
+    service.submit_community_action(issue.id, CommunityActionType.STILL_UNRESOLVED, "actor-one")
+    service.submit_community_action(issue.id, CommunityActionType.FIXED, "actor-one")
+    service.submit_community_action(issue.id, CommunityActionType.INCORRECT, "actor-one")
+
+    assert trigger.calls == [
+        (issue.id, IssueStatus.REPORTED, "community_action_saw_this_too"),
+        (issue.id, IssueStatus.REPORTED, "community_action_still_unresolved"),
+        (issue.id, IssueStatus.REPORTED, "community_action_fixed"),
+    ]
 
 
 def test_invalid_status_does_not_promote_and_rejected_disables_actions() -> None:

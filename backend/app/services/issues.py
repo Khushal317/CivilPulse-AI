@@ -18,6 +18,7 @@ from app.schemas.issues import (
     IssuePublicDetail,
     IssueUpdatePublic,
 )
+from app.services.areas import AreaScoreTrigger
 
 
 def image_url(key: str) -> str:
@@ -37,10 +38,18 @@ def _community_counts(values: dict[CommunityActionType, int]) -> CommunityCounts
     )
 
 
+SCORE_TRIGGER_ACTIONS = {
+    CommunityActionType.SAW_THIS_TOO,
+    CommunityActionType.STILL_UNRESOLVED,
+    CommunityActionType.FIXED,
+}
+
+
 @dataclass(slots=True)
 class IssueService:
     repository: IssueRepository
     settings: Settings
+    area_score_trigger: AreaScoreTrigger | None = None
 
     def list_public(self, query: IssueListQuery) -> IssueListResponse:
         records, total_items = self.repository.list_public(query)
@@ -116,27 +125,35 @@ class IssueService:
             )
 
         accepted = self.repository.add_action_if_absent(issue_id, action_type, actor_hash)
-        if (
-            accepted
-            and action_type is CommunityActionType.SAW_THIS_TOO
-            and issue.status is IssueStatus.REPORTED
-        ):
-            confirmations = self.repository.community_counts(issue_id).get(
-                CommunityActionType.SAW_THIS_TOO,
-                0,
-            )
-            if confirmations >= 3:
-                issue.status = IssueStatus.COMMUNITY_VERIFIED
-                self.repository.add_update(
-                    IssueUpdate(
-                        issue_id=issue.id,
-                        from_status=IssueStatus.REPORTED,
-                        to_status=IssueStatus.COMMUNITY_VERIFIED,
-                        note="Automatically promoted after three distinct community confirmations.",
-                        actor_type=UpdateActorType.SYSTEM,
-                    ),
+        if accepted:
+            if (
+                action_type is CommunityActionType.SAW_THIS_TOO
+                and issue.status is IssueStatus.REPORTED
+            ):
+                confirmations = self.repository.community_counts(issue_id).get(
+                    CommunityActionType.SAW_THIS_TOO,
+                    0,
                 )
-                self.repository.flush()
+                if confirmations >= 3:
+                    issue.status = IssueStatus.COMMUNITY_VERIFIED
+                    self.repository.add_update(
+                        IssueUpdate(
+                            issue_id=issue.id,
+                            from_status=IssueStatus.REPORTED,
+                            to_status=IssueStatus.COMMUNITY_VERIFIED,
+                            note=(
+                                "Automatically promoted after three distinct community "
+                                "confirmations."
+                            ),
+                            actor_type=UpdateActorType.SYSTEM,
+                        ),
+                    )
+                    self.repository.flush()
+            if action_type in SCORE_TRIGGER_ACTIONS:
+                self._recalculate_issue_area(
+                    issue,
+                    event_type=f"community_action_{action_type.value}",
+                )
 
         return self._action_response(issue, action_type, actor_hash, accepted=accepted)
 
@@ -155,6 +172,10 @@ class IssueService:
             community_counts=_community_counts(self.repository.community_counts(issue.id)),
             viewer_actions=self.repository.viewer_actions(issue.id, actor_hash),
         )
+
+    def _recalculate_issue_area(self, issue: Issue, *, event_type: str) -> None:
+        if self.area_score_trigger is not None:
+            self.area_score_trigger.recalculate_issue_area(issue, event_type=event_type)
 
     def _detail_response(self, issue: Issue, actor_hash: str) -> IssuePublicDetail:
         counts = _community_counts(self.repository.community_counts(issue.id))

@@ -1,4 +1,5 @@
 from app.schemas.areas import (
+    AreaActiveIssueResponse,
     AreaDetail,
     AreaListResponse,
     AreaScoreBreakdown,
@@ -22,10 +23,17 @@ from app.schemas.issues import (
     ReportDraftResponse,
     ReportDraftUpdate,
 )
+from app.schemas.missions import (
+    MissionAreaSummary,
+    MissionDetail,
+    MissionListResponse,
+    MissionSummary,
+)
 
 __all__ = [
     "AIAnalysis",
     "APIModel",
+    "AreaActiveIssueResponse",
     "AreaDetail",
     "AreaListResponse",
     "AreaScoreBreakdown",
@@ -40,6 +48,10 @@ __all__ = [
     "IssueListItem",
     "IssuePublicDetail",
     "IssueUpdatePublic",
+    "MissionAreaSummary",
+    "MissionDetail",
+    "MissionListResponse",
+    "MissionSummary",
     "PaginationParams",
     "PublishedReportResponse",
     "ReportAnalysisInput",

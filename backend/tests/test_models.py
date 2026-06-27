@@ -1,6 +1,6 @@
 from typing import cast
 
-from sqlalchemy import CheckConstraint, UniqueConstraint
+from sqlalchemy import CheckConstraint, Index, UniqueConstraint
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable, Table
 
@@ -14,6 +14,8 @@ from app.models import (
     Issue,
     IssueDraft,
     IssueUpdate,
+    Mission,
+    MissionAction,
 )
 
 
@@ -27,6 +29,8 @@ def test_core_tables_are_registered() -> None:
         "issue_drafts",
         "issue_updates",
         "issues",
+        "mission_actions",
+        "missions",
     }
 
 
@@ -47,6 +51,20 @@ def test_community_action_has_actor_uniqueness_constraint() -> None:
     assert "uq_community_actions_issue_action_actor" in constraints
 
 
+def test_mission_action_has_null_safe_actor_uniqueness_indexes() -> None:
+    table = cast(Table, MissionAction.__table__)
+    indexes = {
+        index.name
+        for index in table.indexes
+        if isinstance(index, Index) and index.unique
+    }
+
+    assert indexes >= {
+        "uq_mission_actions_issue_actor",
+        "uq_mission_actions_global_actor",
+    }
+
+
 def test_enum_columns_create_database_checks() -> None:
     table = cast(Table, Issue.__table__)
     constraints = [
@@ -61,6 +79,19 @@ def test_enum_columns_create_database_checks() -> None:
     }
 
 
+def test_mission_progress_constraints_are_registered() -> None:
+    table = cast(Table, Mission.__table__)
+    constraints = [
+        constraint for constraint in table.constraints if isinstance(constraint, CheckConstraint)
+    ]
+
+    assert {constraint.name for constraint in constraints} >= {
+        "ck_missions_target_count_positive",
+        "ck_missions_progress_count_non_negative",
+        "ck_missions_progress_not_above_target",
+    }
+
+
 def test_expected_models_use_uuid_primary_keys() -> None:
     for model in (
         IssueDraft,
@@ -71,6 +102,8 @@ def test_expected_models_use_uuid_primary_keys() -> None:
         CivicOperationsReport,
         Area,
         AreaScoreEvent,
+        Mission,
+        MissionAction,
     ):
         table = cast(Table, model.__table__)
         assert [column.name for column in table.primary_key.columns] == ["id"]

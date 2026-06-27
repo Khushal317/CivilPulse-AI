@@ -7,8 +7,11 @@ import { AdminIssuesPage } from "../features/admin/AdminIssuesPage";
 import { AdminLoginPage } from "../features/admin/AdminLoginPage";
 import { AreaDetailPage } from "../features/areas/AreaDetailPage";
 import { NeighborhoodArenaPage } from "../features/areas/NeighborhoodArenaPage";
+import { RankingsPage } from "../features/areas/RankingsPage";
 import { IssueDetailPage } from "../features/issues/IssueDetailPage";
 import { TrackerPage } from "../features/issues/TrackerPage";
+import { MissionDetailPage } from "../features/missions/MissionDetailPage";
+import { MissionsPage } from "../features/missions/MissionsPage";
 import { ReportPage } from "../features/reports/ReportPage";
 import { ReportReviewPage } from "../features/reports/ReportReviewPage";
 import { PublicLayout } from "../layouts/PublicLayout";
@@ -45,6 +48,18 @@ export const appRoutes: RouteObject[] = [
       {
         path: "neighborhoods/:slug",
         element: <AreaDetailPage />,
+      },
+      {
+        path: "rankings",
+        element: <RankingsPage />,
+      },
+      {
+        path: "missions",
+        element: <MissionsPage />,
+      },
+      {
+        path: "missions/:missionId",
+        element: <MissionDetailPage />,
       },
       { path: "*", element: <NotFoundPage /> },
     ],

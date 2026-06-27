@@ -4,6 +4,7 @@ from uuid import UUID
 from pydantic import Field
 
 from app.domain.areas import AreaScoreKey
+from app.domain.enums import IssueCategory, IssueSeverity, IssueStatus
 from app.schemas.common import APIModel
 
 
@@ -49,6 +50,19 @@ class AreaScoreEventResponse(APIModel):
     created_at: datetime
 
 
+class AreaActiveIssueResponse(APIModel):
+    id: UUID
+    public_reference: str
+    title: str
+    category: IssueCategory
+    severity: IssueSeverity
+    status: IssueStatus
+    location: str
+    landmark: str | None
+    updated_at: datetime
+
+
 class AreaDetail(AreaSummary):
     total_issues: int = Field(ge=0)
     recent_score_events: list[AreaScoreEventResponse] = Field(default_factory=list)
+    active_issues: list[AreaActiveIssueResponse] = Field(default_factory=list)

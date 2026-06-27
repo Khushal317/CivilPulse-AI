@@ -62,12 +62,47 @@ vi.stubGlobal(
           active_missions: 0,
           total_issues: 0,
           recent_score_events: [],
+          active_issues: [],
           created_at: "2026-06-27T10:00:00Z",
           updated_at: "2026-06-27T10:00:00Z",
         };
       } else {
         payload = {
           items: [],
+        };
+      }
+    } else if (url.includes("/api/v1/missions")) {
+      const mission = {
+        id: "22222222-2222-4222-8222-222222222222",
+        title: "Verify repaired streetlights",
+        mission_type: "verification",
+        status: "active",
+        area: {
+          id: "11111111-1111-4111-8111-111111111111",
+          name: "Sector 12",
+          slug: "civicpulse-city-sector-12",
+          city: "CivicPulse City",
+        },
+        goal_description: "Ask nearby residents to confirm the streetlights are working.",
+        target_count: 5,
+        progress_count: 2,
+        category: "streetlight",
+        reward: { points: 20, score_key: "participation" },
+        ai_reason: "Several residents reported lighting issues in this area.",
+        expires_at: "2026-07-04T10:00:00Z",
+        published_at: "2026-06-27T10:00:00Z",
+        completed_at: null,
+        created_at: "2026-06-27T10:00:00Z",
+        updated_at: "2026-06-27T10:00:00Z",
+      };
+      if (url.includes("/api/v1/missions/22222222-2222-4222-8222-222222222222")) {
+        payload = {
+          ...mission,
+          linked_issue_ids: [],
+        };
+      } else {
+        payload = {
+          items: [mission],
         };
       }
     } else if (url.includes("/api/v1/issues")) {
@@ -105,6 +140,13 @@ describe("application route shells", () => {
     ["/issues", "Public issue tracker", "Primary navigation"],
     ["/neighborhoods", "Civic Genome profiles for every area", "Primary navigation"],
     ["/neighborhoods/civicpulse-city-sector-12", "Sector 12", "Primary navigation"],
+    ["/rankings", "Positive Civic Genome rankings", "Primary navigation"],
+    ["/missions", "Useful missions for local civic progress", "Primary navigation"],
+    [
+      "/missions/22222222-2222-4222-8222-222222222222",
+      "Verify repaired streetlights",
+      "Primary navigation",
+    ],
     ["/admin", "Administrator dashboard", "Admin navigation"],
     ["/admin/issues", "Manage reported issues", "Admin navigation"],
   ])("renders %s in the intended shell", async (path, heading, navigation) => {

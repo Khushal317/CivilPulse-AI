@@ -29,6 +29,8 @@ export function PublicLayout() {
             <Link to="/report">Report an issue</Link>
             <Link to="/issues">Public tracker</Link>
             <Link to="/neighborhoods">Neighborhoods</Link>
+            <Link to="/rankings">Rankings</Link>
+            <Link to="/missions">Missions</Link>
             <Link to="/admin">Admin</Link>
           </nav>
           <p className="footer-disclaimer">

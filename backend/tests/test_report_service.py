@@ -156,6 +156,14 @@ class FakeReportRepository(ReportRepository):
         return None
 
 
+class FakeAreaScoreTrigger:
+    def __init__(self) -> None:
+        self.calls: list[tuple[uuid.UUID, uuid.UUID | None, str]] = []
+
+    def recalculate_issue_area(self, issue: Issue, *, event_type: str) -> None:
+        self.calls.append((issue.id, issue.area_id, event_type))
+
+
 @pytest.fixture
 def report_input() -> ReportAnalysisInput:
     return ReportAnalysisInput(
@@ -185,6 +193,7 @@ def build_service(
     repository: FakeReportRepository | None = None,
     storage: FakeStorage | None = None,
     analyzer: CivicIssueAnalyzer | None = None,
+    area_score_trigger: FakeAreaScoreTrigger | None = None,
 ) -> tuple[ReportService, FakeReportRepository, FakeStorage]:
     repo = repository or FakeReportRepository()
     image_storage = storage or FakeStorage()
@@ -193,6 +202,7 @@ def build_service(
         storage=image_storage,
         analyzer=analyzer or FakeAnalyzer(),
         settings=Settings(report_draft_ttl_minutes=60),
+        area_score_trigger=area_score_trigger,
     )
     return service, repo, image_storage
 
@@ -220,6 +230,23 @@ def test_analyze_edit_publish_and_repeat_are_idempotent(
     assert issue.area is not None
     assert issue.area.name == "Sector 12"
     assert len(issue.updates) == 1
+
+
+def test_publish_triggers_civic_genome_recalculation_once(
+    report_input: ReportAnalysisInput,
+    image: ValidatedImage,
+) -> None:
+    trigger = FakeAreaScoreTrigger()
+    service, repository, _storage = build_service(area_score_trigger=trigger)
+    draft = service.analyze(report_input, image)
+
+    first = service.publish(draft.id)
+    second = service.publish(draft.id)
+
+    assert first.issue_id == second.issue_id
+    assert trigger.calls == [
+        (first.issue_id, next(iter(repository.issues.values())).area_id, "issue_published"),
+    ]
 
 
 def test_ai_failure_removes_uploaded_image(

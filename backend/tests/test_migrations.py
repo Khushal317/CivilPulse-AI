@@ -17,6 +17,8 @@ EXPECTED_TABLES = {
     "issue_drafts",
     "issue_updates",
     "issues",
+    "mission_actions",
+    "missions",
 }
 
 
@@ -41,6 +43,11 @@ def test_initial_migration_generates_postgresql_sql(
     assert "CREATE TABLE areas" in sql
     assert "CREATE TABLE civic_operations_reports" in sql
     assert "CREATE TABLE issues" in sql
+    assert "CREATE TABLE missions" in sql
+    assert "CREATE TABLE mission_actions" in sql
+    assert "uq_mission_actions_issue_actor" in sql
+    assert "uq_mission_actions_global_actor" in sql
+    assert "progress_not_above_target" in sql
     assert "uq_community_actions_issue_action_actor" in sql
     assert "DROP TABLE issues" not in sql
 
@@ -63,6 +70,8 @@ def test_initial_migration_generates_downgrade_sql(
     assert "DROP TABLE area_score_events" in sql
     assert "DROP TABLE areas" in sql
     assert "DROP TABLE civic_operations_reports" in sql
+    assert "DROP TABLE mission_actions" in sql
+    assert "DROP TABLE missions" in sql
     assert "DROP TABLE issues" in sql
     assert "DROP TABLE issue_drafts" in sql
 

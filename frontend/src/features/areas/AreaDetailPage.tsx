@@ -30,6 +30,25 @@ const scoreDescriptions: Record<keyof AreaScoreBreakdown, string> = {
   environment: "Water leakage, drainage, sewage, waste, and environmental issue patterns.",
 };
 
+const eventLabels: Record<string, string> = {
+  issue_published: "Citizen report published",
+  community_action_saw_this_too: "Community verification",
+  community_action_still_unresolved: "Still unresolved signal",
+  community_action_fixed: "Fixed confirmation",
+  admin_resolved: "Admin resolved",
+  admin_rejected: "Admin rejected",
+  admin_restored: "Admin restored",
+  score_recalculated: "Score recalculated",
+};
+
+function eventLabel(eventType: string) {
+  return eventLabels[eventType] ?? eventType.replaceAll("_", " ");
+}
+
+function label(value: string) {
+  return value.replaceAll("_", " ");
+}
+
 function ScoreGrid({ area }: { area: AreaDetail }) {
   return (
     <div className="area-detail-score-grid">
@@ -124,6 +143,7 @@ export function AreaDetailPage() {
               <ul className="area-event-list">
                 {data.recent_score_events.map((event) => (
                   <li key={event.id}>
+                    <span className="area-event-type">{eventLabel(event.event_type)}</span>
                     <strong>
                       {event.score_key.replace("_", " ")}{" "}
                       {event.score_change > 0 ? "+" : ""}
@@ -161,6 +181,46 @@ export function AreaDetailPage() {
                 <dd>{data.active_missions}</dd>
               </div>
             </dl>
+          </Card>
+        </div>
+
+        <div className="area-detail-grid">
+          <Card padding="large">
+            <p className="eyebrow">Active local issues</p>
+            <h2>Issues currently shaping this Civic Genome</h2>
+            {data.active_issues.length ? (
+              <ul className="area-issue-list">
+                {data.active_issues.map((issue) => (
+                  <li key={issue.id}>
+                    <div>
+                      <Link to={`/issues/${issue.id}`}>{issue.title}</Link>
+                      <span>{issue.public_reference}</span>
+                    </div>
+                    <div className="area-card-meta">
+                      <span>{label(issue.category)}</span>
+                      <span>{label(issue.severity)}</span>
+                      <span>{label(issue.status)}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="admin-muted">
+                No active public issues are currently attached to this area.
+              </p>
+            )}
+          </Card>
+
+          <Card padding="large">
+            <p className="eyebrow">Community missions</p>
+            <h2>Active missions</h2>
+            <p className="admin-muted">
+              {data.active_missions > 0
+                ? `${data.active_missions} active mission${
+                    data.active_missions === 1 ? "" : "s"
+                  } are connected to this area.`
+                : "Missions will appear here after the mission engine is introduced."}
+            </p>
           </Card>
         </div>
       </div>

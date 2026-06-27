@@ -43,6 +43,7 @@ def make_issue(status: IssueStatus = IssueStatus.REPORTED) -> Issue:
         citizen_contact="private@example.com",
         ai_model="gemini-test",
         prompt_version="v1",
+        area_id=UUID(int=30),
         created_at=created_at,
         updated_at=created_at,
     )
@@ -99,6 +100,14 @@ class FakeAdminIssueRepository(AdminIssueRepository):
         return None
 
 
+class FakeAreaScoreTrigger:
+    def __init__(self) -> None:
+        self.calls: list[tuple[UUID, IssueStatus, str]] = []
+
+    def recalculate_issue_area(self, issue: Issue, *, event_type: str) -> None:
+        self.calls.append((issue.id, issue.status, event_type))
+
+
 def test_dashboard_and_admin_detail_include_authorized_private_fields() -> None:
     repository = FakeAdminIssueRepository(make_issue())
     service = AdminService(repository)
@@ -128,6 +137,48 @@ def test_valid_transition_creates_public_admin_timeline_note() -> None:
     assert len(repository.updates) == 1
     assert repository.updates[0].from_status is IssueStatus.REPORTED
     assert repository.updates[0].note == "Road maintenance team assigned for inspection."
+
+
+def test_admin_resolved_rejected_and_restored_statuses_trigger_civic_genome() -> None:
+    resolved_issue = make_issue()
+    resolved_trigger = FakeAreaScoreTrigger()
+    AdminService(
+        FakeAdminIssueRepository(resolved_issue),
+        area_score_trigger=resolved_trigger,
+    ).update_status(
+        resolved_issue.id,
+        AdminStatusUpdateRequest(
+            to_status=IssueStatus.RESOLVED,
+            note="Road repair completed and verified by field staff.",
+        ),
+    )
+
+    rejected_issue = make_issue()
+    rejected_repository = FakeAdminIssueRepository(rejected_issue)
+    rejected_trigger = FakeAreaScoreTrigger()
+    service = AdminService(rejected_repository, area_score_trigger=rejected_trigger)
+    service.update_status(
+        rejected_issue.id,
+        AdminStatusUpdateRequest(
+            to_status=IssueStatus.REJECTED,
+            rejection_reason="Duplicate of an existing public issue.",
+        ),
+    )
+    service.update_status(
+        rejected_issue.id,
+        AdminStatusUpdateRequest(
+            to_status=IssueStatus.REPORTED,
+            note="Restored after administrator review.",
+        ),
+    )
+
+    assert resolved_trigger.calls == [
+        (resolved_issue.id, IssueStatus.RESOLVED, "admin_resolved"),
+    ]
+    assert rejected_trigger.calls == [
+        (rejected_issue.id, IssueStatus.REJECTED, "admin_rejected"),
+        (rejected_issue.id, IssueStatus.REPORTED, "admin_restored"),
+    ]
 
 
 def test_invalid_transition_and_missing_rejection_reason_are_rejected() -> None:
