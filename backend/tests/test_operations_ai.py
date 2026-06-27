@@ -175,6 +175,9 @@ def test_operations_prompt_excludes_private_field_names() -> None:
     prompt = operations_prompt([operations_issue()])
 
     assert "Severe pothole near school gate" in prompt
+    assert '"executive_summary"' in prompt
+    assert '"urgent_issues"' in prompt
+    assert "Do not add keys outside this shape" in prompt
     assert "citizen_contact" not in prompt
     assert "citizen_name" not in prompt
     assert "actor_hash" not in prompt
@@ -194,6 +197,7 @@ def test_gemini_operations_analyzer_parses_valid_json() -> None:
     assert FakeGenAIClient.latest_models is not None
     call = FakeGenAIClient.latest_models.calls[0]
     assert call["model"] == "gemini-operations-test"
+    assert call["config"].response_schema is None
     assert "Never invent issue IDs" in OPERATIONS_SYSTEM_INSTRUCTION
     assert "City Public School" in str(call["contents"])
 

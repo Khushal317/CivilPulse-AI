@@ -327,6 +327,51 @@ describe("administrator workflow", () => {
     expect(await screen.findByText("Message copied")).toBeInTheDocument();
   });
 
+  it("loads the latest operations report without generating a new one", async () => {
+    const fetchMock = vi.fn().mockImplementation(
+      (input: RequestInfo | URL, options?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (url.includes("/auth/session")) return Promise.resolve(jsonResponse(session));
+        if (url.includes("/dashboard")) {
+          return Promise.resolve(
+            jsonResponse({
+              metrics: {
+                total_reports: 15,
+                high_severity: 8,
+                verified: 5,
+                pending: 10,
+                resolved: 3,
+              },
+              category_breakdown: [{ category: "road_damage", count: 5 }],
+              latest_reports: [issueSummary],
+              priority_issues: [issueSummary],
+            }),
+          );
+        }
+        if (url.includes("/operations/latest")) {
+          expect(options?.method).toBeUndefined();
+          return Promise.resolve(jsonResponse(operationsReport));
+        }
+        if (url.includes("/operations/analyze")) {
+          return Promise.resolve(jsonResponse({ error: { message: "Should not analyze" } }, 500));
+        }
+        return Promise.resolve(jsonResponse({}));
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    renderRoute("/admin");
+
+    expect(await screen.findByRole("heading", { name: "Executive summary" }))
+      .toBeInTheDocument();
+    expect(screen.getByText("Two active civic issues need administrator attention."))
+      .toBeInTheDocument();
+    expect(screen.getByText("Latest operations report")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      expect.stringContaining("/operations/analyze"),
+      expect.anything(),
+    );
+  });
+
   it("shows private details and confirms a rejection with CSRF", async () => {
     const user = userEvent.setup();
     let rejected = false;

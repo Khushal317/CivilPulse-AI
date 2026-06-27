@@ -119,9 +119,81 @@ def _analysis_from_payload(
 def operations_prompt(issues: list[OperationsIssueInput]) -> str:
     payload = [issue.model_dump(mode="json") for issue in issues]
     return (
-        "Analyze the following active CivicPulse AI issues and return the required JSON.\n"
+        "Analyze the following active CivicPulse AI issues and return exactly one JSON object.\n"
+        "Do not wrap the response in markdown, code fences, or an outer key such as "
+        "`analysis_report`.\n"
         "Only reference issue IDs and public references from this list.\n"
-        "Do not include citizen names, contacts, image keys, sessions, or secrets.\n\n"
+        "Do not include citizen names, contacts, image keys, sessions, or secrets.\n"
+        "Use only these enum values:\n"
+        "- severity: low, medium, high, critical\n"
+        "- category: road_damage, garbage_waste, streetlight, water_leakage, "
+        "drainage_sewage, public_safety, other\n"
+        "- risk_level: low, medium, high, critical\n\n"
+        "Required JSON shape:\n"
+        "{\n"
+        '  "executive_summary": "short administrator summary",\n'
+        '  "urgent_issues": [\n'
+        "    {\n"
+        '      "issue_id": "provided UUID",\n'
+        '      "public_reference": "provided public reference",\n'
+        '      "title": "provided issue title",\n'
+        '      "location": "provided location and landmark if useful",\n'
+        '      "department": "provided department",\n'
+        '      "severity": "low|medium|high|critical",\n'
+        '      "priority_reason": "why this issue is urgent",\n'
+        '      "recommended_action": "administrator action to consider",\n'
+        '      "suggested_time_window": "time window"\n'
+        "    }\n"
+        "  ],\n"
+        '  "duplicate_clusters": [\n'
+        "    {\n"
+        '      "cluster_title": "cluster title",\n'
+        '      "issues": [\n'
+        '        {"issue_id": "provided UUID", "public_reference": "provided reference", '
+        '"title": "provided title"}\n'
+        "      ],\n"
+        '      "reason": "why these appear duplicate",\n'
+        '      "recommended_action": "administrator action to consider"\n'
+        "    }\n"
+        "  ],\n"
+        '  "area_hotspots": [\n'
+        "    {\n"
+        '      "area": "provided location/area",\n'
+        '      "issue_count": 1,\n'
+        '      "main_categories": ["road_damage"],\n'
+        '      "risk_level": "low|medium|high|critical",\n'
+        '      "insight": "pattern insight"\n'
+        "    }\n"
+        "  ],\n"
+        '  "department_priorities": [\n'
+        "    {\n"
+        '      "department": "provided department",\n'
+        '      "open_issues": 1,\n'
+        '      "high_priority_count": 1,\n'
+        '      "recommended_focus": "department focus"\n'
+        "    }\n"
+        "  ],\n"
+        '  "escalation_messages": [\n'
+        "    {\n"
+        '      "department": "provided department",\n'
+        '      "issue_id": "provided UUID",\n'
+        '      "public_reference": "provided public reference",\n'
+        '      "issue_title": "provided title",\n'
+        '      "message": "draft internal escalation message"\n'
+        "    }\n"
+        "  ],\n"
+        '  "predicted_risks": [\n'
+        "    {\n"
+        '      "issue_id": "provided UUID",\n'
+        '      "public_reference": "provided public reference",\n'
+        '      "issue_title": "provided title",\n'
+        '      "risk": "risk if ignored",\n'
+        '      "risk_level": "low|medium|high|critical",\n'
+        '      "preventive_action": "preventive action"\n'
+        "    }\n"
+        "  ]\n"
+        "}\n\n"
+        "Use empty arrays for sections with no evidence. Do not add keys outside this shape.\n\n"
         f"Active issues JSON:\n{json.dumps(payload, ensure_ascii=False)}"
     )
 
@@ -294,7 +366,6 @@ class GeminiCivicOperationsAnalyzer:
                     config=types.GenerateContentConfig(
                         system_instruction=OPERATIONS_SYSTEM_INSTRUCTION,
                         response_mime_type="application/json",
-                        response_schema=GeminiOperationsPayload,
                         temperature=0.1,
                     ),
                 )
