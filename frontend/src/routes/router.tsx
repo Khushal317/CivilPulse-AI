@@ -5,6 +5,8 @@ import { AdminDashboardPage } from "../features/admin/AdminDashboardPage";
 import { AdminIssueDetailPage } from "../features/admin/AdminIssueDetailPage";
 import { AdminIssuesPage } from "../features/admin/AdminIssuesPage";
 import { AdminLoginPage } from "../features/admin/AdminLoginPage";
+import { AreaDetailPage } from "../features/areas/AreaDetailPage";
+import { NeighborhoodArenaPage } from "../features/areas/NeighborhoodArenaPage";
 import { IssueDetailPage } from "../features/issues/IssueDetailPage";
 import { TrackerPage } from "../features/issues/TrackerPage";
 import { ReportPage } from "../features/reports/ReportPage";
@@ -35,6 +37,14 @@ export const appRoutes: RouteObject[] = [
       {
         path: "issues/:issueId",
         element: <IssueDetailPage />,
+      },
+      {
+        path: "neighborhoods",
+        element: <NeighborhoodArenaPage />,
+      },
+      {
+        path: "neighborhoods/:slug",
+        element: <AreaDetailPage />,
       },
       { path: "*", element: <NotFoundPage /> },
     ],

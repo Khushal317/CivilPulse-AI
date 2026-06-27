@@ -39,13 +39,44 @@ vi.stubGlobal(
         total_items: 0,
         total_pages: 0,
       };
+    } else if (url.includes("/api/v1/areas")) {
+      if (url.includes("/api/v1/areas/civicpulse-city-sector-12")) {
+        payload = {
+          id: "11111111-1111-4111-8111-111111111111",
+          name: "Sector 12",
+          slug: "civicpulse-city-sector-12",
+          city: "CivicPulse City",
+          rank: 1,
+          status_label: "improving",
+          scores: {
+            overall: 70,
+            infrastructure: 70,
+            cleanliness: 70,
+            safety: 70,
+            participation: 70,
+            responsiveness: 70,
+            environment: 70,
+          },
+          open_issues: 0,
+          resolved_this_week: 0,
+          active_missions: 0,
+          total_issues: 0,
+          recent_score_events: [],
+          created_at: "2026-06-27T10:00:00Z",
+          updated_at: "2026-06-27T10:00:00Z",
+        };
+      } else {
+        payload = {
+          items: [],
+        };
+      }
     } else if (url.includes("/api/v1/issues")) {
       payload = {
-          items: [],
-          page: 1,
-          page_size: 12,
-          total_items: 0,
-          total_pages: 0,
+        items: [],
+        page: 1,
+        page_size: 12,
+        total_items: 0,
+        total_pages: 0,
       };
     } else {
       payload = {
@@ -72,6 +103,8 @@ describe("application route shells", () => {
     ],
     ["/report", "Report a local issue", "Primary navigation"],
     ["/issues", "Public issue tracker", "Primary navigation"],
+    ["/neighborhoods", "Civic Genome profiles for every area", "Primary navigation"],
+    ["/neighborhoods/civicpulse-city-sector-12", "Sector 12", "Primary navigation"],
     ["/admin", "Administrator dashboard", "Admin navigation"],
     ["/admin/issues", "Manage reported issues", "Admin navigation"],
   ])("renders %s in the intended shell", async (path, heading, navigation) => {

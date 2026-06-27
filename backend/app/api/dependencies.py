@@ -8,12 +8,14 @@ from app.core.config import Settings, get_settings
 from app.db.session import get_db_session
 from app.repositories.admin import SQLAlchemyAdminSessionRepository
 from app.repositories.admin_issues import SQLAlchemyAdminIssueRepository
+from app.repositories.areas import SQLAlchemyAreaRepository
 from app.repositories.issues import SQLAlchemyIssueRepository
 from app.repositories.operations import SQLAlchemyOperationsRepository
 from app.repositories.reports import SQLAlchemyReportRepository
 from app.services.admin import AdminService
 from app.services.admin_auth import AdminAuthService, get_login_rate_limiter
 from app.services.ai import CivicIssueAnalyzer, get_civic_issue_analyzer
+from app.services.areas import AreaService
 from app.services.issues import IssueService
 from app.services.operations import OperationsService
 from app.services.operations_ai import CivicOperationsAnalyzer, get_civic_operations_analyzer
@@ -105,6 +107,13 @@ def get_admin_service(session: DatabaseDependency) -> AdminService:
 
 
 AdminServiceDependency = Annotated[AdminService, Depends(get_admin_service)]
+
+
+def get_area_service(session: DatabaseDependency) -> AreaService:
+    return AreaService(repository=SQLAlchemyAreaRepository(session))
+
+
+AreaServiceDependency = Annotated[AreaService, Depends(get_area_service)]
 
 
 def get_operations_service(

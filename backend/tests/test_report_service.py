@@ -6,6 +6,7 @@ import pytest
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.domain.enums import IssueCategory, IssueSeverity, IssueStatus, UrgencyLevel
+from app.models.area import Area
 from app.models.issue import Issue
 from app.models.issue_draft import IssueDraft
 from app.repositories.reports import ReportRepository
@@ -84,6 +85,7 @@ class FakeReportRepository(ReportRepository):
     def __init__(self) -> None:
         self.drafts: dict[uuid.UUID, IssueDraft] = {}
         self.issues: dict[str, Issue] = {}
+        self.areas: dict[str, Area] = {}
 
     def add_draft(self, draft: IssueDraft) -> IssueDraft:
         draft.id = draft.id or uuid.uuid4()
@@ -103,8 +105,32 @@ class FakeReportRepository(ReportRepository):
         issue.id = issue.id or uuid.uuid4()
         issue.created_at = datetime.now(UTC)
         issue.updated_at = issue.created_at
+        if issue.area is not None:
+            issue.area_id = issue.area.id
         self.issues[issue.image_key] = issue
         return issue
+
+    def get_or_create_area_for_location(self, location: str) -> Area:
+        area = self.areas.get(location)
+        if area is None:
+            area = Area(
+                id=uuid.uuid4(),
+                name=location,
+                slug=location.lower().replace(" ", "-"),
+                city="CivicPulse City",
+                overall_score=70,
+                infrastructure_score=70,
+                cleanliness_score=70,
+                safety_score=70,
+                participation_score=70,
+                responsiveness_score=70,
+                environment_score=70,
+                status_label="improving",
+                created_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
+            )
+            self.areas[location] = area
+        return area
 
     def find_issue_by_image_key(self, image_key: str) -> Issue | None:
         return self.issues.get(image_key)
@@ -191,6 +217,8 @@ def test_analyze_edit_publish_and_repeat_are_idempotent(
     assert len(repository.issues) == 1
     issue = next(iter(repository.issues.values()))
     assert issue.citizen_contact == "private@example.com"
+    assert issue.area is not None
+    assert issue.area.name == "Sector 12"
     assert len(issue.updates) == 1
 
 

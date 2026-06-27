@@ -7,6 +7,8 @@ from sqlalchemy.schema import CreateTable, Table
 from app.db.base import Base
 from app.models import (
     AdminSession,
+    Area,
+    AreaScoreEvent,
     CivicOperationsReport,
     CommunityAction,
     Issue,
@@ -18,6 +20,8 @@ from app.models import (
 def test_core_tables_are_registered() -> None:
     assert set(Base.metadata.tables) == {
         "admin_sessions",
+        "areas",
+        "area_score_events",
         "civic_operations_reports",
         "community_actions",
         "issue_drafts",
@@ -65,6 +69,8 @@ def test_expected_models_use_uuid_primary_keys() -> None:
         CommunityAction,
         AdminSession,
         CivicOperationsReport,
+        Area,
+        AreaScoreEvent,
     ):
         table = cast(Table, model.__table__)
         assert [column.name for column in table.primary_key.columns] == ["id"]

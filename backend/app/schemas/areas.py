@@ -1,0 +1,54 @@
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import Field
+
+from app.domain.areas import AreaScoreKey
+from app.schemas.common import APIModel
+
+
+class AreaScoreBreakdown(APIModel):
+    overall: int = Field(ge=0, le=100)
+    infrastructure: int = Field(ge=0, le=100)
+    cleanliness: int = Field(ge=0, le=100)
+    safety: int = Field(ge=0, le=100)
+    participation: int = Field(ge=0, le=100)
+    responsiveness: int = Field(ge=0, le=100)
+    environment: int = Field(ge=0, le=100)
+
+
+class AreaSummary(APIModel):
+    id: UUID
+    name: str
+    slug: str
+    city: str
+    rank: int | None
+    status_label: str
+    scores: AreaScoreBreakdown
+    open_issues: int = Field(ge=0)
+    resolved_this_week: int = Field(ge=0)
+    active_missions: int = Field(default=0, ge=0)
+    created_at: datetime
+    updated_at: datetime
+
+
+class AreaListResponse(APIModel):
+    items: list[AreaSummary]
+
+
+class AreaScoreEventResponse(APIModel):
+    id: UUID
+    event_type: str
+    related_issue_id: UUID | None
+    related_mission_id: UUID | None
+    score_key: AreaScoreKey
+    score_change: int
+    previous_score: int = Field(ge=0, le=100)
+    new_score: int = Field(ge=0, le=100)
+    reason: str
+    created_at: datetime
+
+
+class AreaDetail(AreaSummary):
+    total_issues: int = Field(ge=0)
+    recent_score_events: list[AreaScoreEventResponse] = Field(default_factory=list)

@@ -5,8 +5,10 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.area import Area
 from app.models.issue import Issue
 from app.models.issue_draft import IssueDraft
+from app.repositories.areas import get_or_create_area_for_location
 
 
 class ReportRepository(Protocol):
@@ -17,6 +19,8 @@ class ReportRepository(Protocol):
     def delete_draft(self, draft: IssueDraft) -> None: ...
 
     def add_issue(self, issue: Issue) -> Issue: ...
+
+    def get_or_create_area_for_location(self, location: str) -> Area: ...
 
     def find_issue_by_image_key(self, image_key: str) -> Issue | None: ...
 
@@ -49,6 +53,9 @@ class SQLAlchemyReportRepository:
         self._session.add(issue)
         self._session.flush()
         return issue
+
+    def get_or_create_area_for_location(self, location: str) -> Area:
+        return get_or_create_area_for_location(self._session, location)
 
     def find_issue_by_image_key(self, image_key: str) -> Issue | None:
         return self._session.scalar(select(Issue).where(Issue.image_key == image_key))

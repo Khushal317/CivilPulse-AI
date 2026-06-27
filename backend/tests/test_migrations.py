@@ -10,6 +10,8 @@ from alembic import command
 EXPECTED_TABLES = {
     "admin_sessions",
     "alembic_version",
+    "areas",
+    "area_score_events",
     "civic_operations_reports",
     "community_actions",
     "issue_drafts",
@@ -35,6 +37,8 @@ def test_initial_migration_generates_postgresql_sql(
     command.upgrade(alembic_config(os.environ["DATABASE_URL"]), "head", sql=True)
 
     sql = capsys.readouterr().out
+    assert "CREATE TABLE area_score_events" in sql
+    assert "CREATE TABLE areas" in sql
     assert "CREATE TABLE civic_operations_reports" in sql
     assert "CREATE TABLE issues" in sql
     assert "uq_community_actions_issue_action_actor" in sql
@@ -56,6 +60,8 @@ def test_initial_migration_generates_downgrade_sql(
     )
 
     sql = capsys.readouterr().out
+    assert "DROP TABLE area_score_events" in sql
+    assert "DROP TABLE areas" in sql
     assert "DROP TABLE civic_operations_reports" in sql
     assert "DROP TABLE issues" in sql
     assert "DROP TABLE issue_drafts" in sql

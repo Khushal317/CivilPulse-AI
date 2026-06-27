@@ -28,6 +28,7 @@ export function PublicLayout() {
           <nav aria-label="Footer navigation">
             <Link to="/report">Report an issue</Link>
             <Link to="/issues">Public tracker</Link>
+            <Link to="/neighborhoods">Neighborhoods</Link>
             <Link to="/admin">Admin</Link>
           </nav>
           <p className="footer-disclaimer">

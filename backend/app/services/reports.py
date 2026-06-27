@@ -18,6 +18,7 @@ from app.schemas.issues import (
     ReportDraftUpdate,
 )
 from app.services.ai import CivicIssueAnalyzer
+from app.services.areas import AreaScoreTrigger
 from app.services.images import ValidatedImage
 from app.services.storage import ImageStorage
 
@@ -79,6 +80,7 @@ class ReportService:
     storage: ImageStorage
     analyzer: CivicIssueAnalyzer
     settings: Settings
+    area_score_trigger: AreaScoreTrigger | None = None
 
     def analyze(
         self,
@@ -158,11 +160,13 @@ class ReportService:
             },
         )
         published_at = now_utc()
+        area = self.repository.get_or_create_area_for_location(draft.location)
         issue = Issue(
             public_reference=self._public_reference(draft.id, published_at),
             original_description=draft.original_description,
             location=draft.location,
             landmark=draft.landmark,
+            area=area,
             image_key=draft.image_key,
             image_mime=draft.image_mime,
             status=IssueStatus.REPORTED,
@@ -183,6 +187,7 @@ class ReportService:
         self.repository.add_issue(issue)
         draft.published_at = published_at
         self.repository.flush()
+        self._recalculate_issue_area(issue, event_type="issue_published")
         return self._published_response(issue, published_at)
 
     def cancel(self, draft_id: UUID) -> None:
@@ -232,6 +237,10 @@ class ReportService:
     @staticmethod
     def _public_reference(draft_id: UUID, published_at: datetime) -> str:
         return f"CP-{published_at:%Y%m%d}-{str(draft_id).replace('-', '')[:8].upper()}"
+
+    def _recalculate_issue_area(self, issue: Issue, *, event_type: str) -> None:
+        if self.area_score_trigger is not None:
+            self.area_score_trigger.recalculate_issue_area(issue, event_type=event_type)
 
     @staticmethod
     def _published_response(issue: Issue, published_at: datetime) -> PublishedReportResponse:

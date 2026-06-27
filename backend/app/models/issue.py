@@ -1,7 +1,7 @@
 import uuid
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Index, String, Text
+from sqlalchemy import ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -9,6 +9,7 @@ from app.domain.enums import IssueCategory, IssueSeverity, IssueStatus, UrgencyL
 from app.models.types import enum_type
 
 if TYPE_CHECKING:
+    from app.models.area import Area
     from app.models.community_action import CommunityAction
     from app.models.issue_update import IssueUpdate
 
@@ -21,6 +22,7 @@ class Issue(TimestampMixin, Base):
         Index("ix_issues_location_search", "location"),
         Index("ix_issues_admin_updated", "updated_at", "id"),
         Index("ix_issues_priority_queue", "severity", "status", "created_at"),
+        Index("ix_issues_area_status", "area_id", "status"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -58,7 +60,11 @@ class Issue(TimestampMixin, Base):
     citizen_contact: Mapped[str | None] = mapped_column(String(255))
     ai_model: Mapped[str] = mapped_column(String(120), nullable=False)
     prompt_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    area_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("areas.id", ondelete="SET NULL"),
+    )
 
+    area: Mapped["Area | None"] = relationship(back_populates="issues")
     updates: Mapped[list["IssueUpdate"]] = relationship(
         back_populates="issue",
         cascade="all, delete-orphan",
