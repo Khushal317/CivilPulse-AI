@@ -25,6 +25,14 @@ const area = {
     responsiveness: 61,
     environment: 72,
   },
+  civic_genome: {
+    civic_health_score: 70,
+    community_power_score: 91,
+    confidence_level: "medium",
+    confidence_reason:
+      "This score is based on moderate activity and may shift as more residents participate.",
+    score_limit_reasons: ["1 unresolved critical issue"],
+  },
   open_issues: 3,
   resolved_this_week: 2,
   active_missions: 0,
@@ -117,6 +125,10 @@ describe("Neighborhood Arena", () => {
 
     expect(await screen.findByRole("heading", { name: "Sector 12" })).toBeInTheDocument();
     expect(screen.getByLabelText("Civic Health 70 out of 100")).toBeInTheDocument();
+    expect(screen.getByText("Community Power")).toBeInTheDocument();
+    expect(screen.getByText("91/100")).toBeInTheDocument();
+    expect(screen.getByText("Confidence")).toBeInTheDocument();
+    expect(screen.getByText("Medium")).toBeInTheDocument();
     expect(screen.getByText("Rank #1")).toBeInTheDocument();
     expect(screen.getByText("Improving")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View Civic Genome" }))
@@ -141,9 +153,13 @@ describe("Neighborhood Arena", () => {
     );
 
     expect(await screen.findByRole("heading", { name: "Sector 12" })).toBeInTheDocument();
-    expect(screen.getByText(/Civic Genome events/)).toBeInTheDocument();
+    expect(screen.getByText("Civic Health Score")).toBeInTheDocument();
+    expect(screen.getByText("Community Power Score")).toBeInTheDocument();
+    expect(screen.getByText("Score limited because")).toBeInTheDocument();
+    expect(screen.getByText("1 unresolved critical issue")).toBeInTheDocument();
+    expect(screen.getByText(/Why this score changed/)).toBeInTheDocument();
     expect(screen.getByText("Citizen report published")).toBeInTheDocument();
-    expect(screen.getByText(/infrastructure -2/)).toBeInTheDocument();
+    expect(screen.getByText(/Infrastructure · Civic Health -2/)).toBeInTheDocument();
     expect(screen.getByText("70 → 68")).toBeInTheDocument();
     expect(screen.getByText("5 total reports")).toBeInTheDocument();
     expect(screen.getByText("What this Civic Genome means")).toBeInTheDocument();
@@ -174,7 +190,7 @@ describe("Neighborhood Arena", () => {
 
     expect(await screen.findByRole("heading", { name: "Positive Civic Genome rankings" }))
       .toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: "Overall leaders" }))
+    expect(await screen.findByRole("heading", { name: "Civic Health leaders" }))
       .toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Safety" }));
     expect(screen.getByRole("heading", { name: "Safety leaders" })).toBeInTheDocument();

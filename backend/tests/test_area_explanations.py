@@ -7,6 +7,7 @@ import pytest
 from app.core.config import Settings
 from app.domain.areas import area_slug
 from app.models.area import Area
+from app.schemas.areas import AreaCivicGenomeProfile
 from app.services.area_explanations import (
     DemoCivicAreaExplainer,
     GeminiCivicAreaExplainer,
@@ -41,6 +42,13 @@ def context():
     area = make_area()
     return AreaInsightInput(
         area=area,
+        civic_genome=AreaCivicGenomeProfile(
+            civic_health_score=72,
+            community_power_score=86,
+            confidence_level="medium",
+            confidence_reason="This score is based on moderate activity.",
+            score_limit_reasons=["1 unresolved critical issue"],
+        ),
         open_issues=2,
         resolved_this_week=1,
         active_missions=1,
@@ -102,6 +110,8 @@ def test_area_explanation_prompt_is_privacy_safe() -> None:
     prompt = area_explanation_prompt(context())
 
     assert "Sector 12" in prompt
+    assert "community_power" in prompt
+    assert "score_limit_reasons" in prompt
     assert "citizen_name" not in prompt
     assert "citizen_contact" not in prompt
     assert "actor_hash" not in prompt

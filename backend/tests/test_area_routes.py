@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 from app.api.dependencies import get_area_service
 from app.main import app
 from app.schemas.areas import (
+    AreaCivicGenomeProfile,
     AreaDetail,
     AreaInsightResponse,
     AreaListResponse,
@@ -30,6 +31,13 @@ def area_summary() -> AreaSummary:
             participation=70,
             responsiveness=70,
             environment=70,
+        ),
+        civic_genome=AreaCivicGenomeProfile(
+            civic_health_score=70,
+            community_power_score=70,
+            confidence_level="medium",
+            confidence_reason="This score is based on moderate activity.",
+            score_limit_reasons=[],
         ),
         open_issues=2,
         resolved_this_week=1,
@@ -68,7 +76,7 @@ def test_public_area_list_route(client: TestClient) -> None:
     assert response.status_code == 200
     item = response.json()["items"][0]
     assert item["name"] == "Sector 12"
-    assert item["scores"]["overall"] == 70
+    assert item["civic_genome"]["civic_health_score"] == 70
     assert item["open_issues"] == 2
     assert "citizen_contact" not in item
 

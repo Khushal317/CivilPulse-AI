@@ -12,10 +12,10 @@ import { AreaScoreBadge } from "./AreaScoreBadge";
 import { statusLabel } from "./areaLabels";
 import type { AreaScoreBreakdown, AreaSummary } from "./types";
 
-type RankingKey = Extract<
-  keyof AreaScoreBreakdown,
-  "overall" | "safety" | "cleanliness" | "participation" | "responsiveness"
->;
+type RankingKey =
+  | "civic_health"
+  | "community_power"
+  | Extract<keyof AreaScoreBreakdown, "safety" | "cleanliness" | "responsiveness">;
 
 interface RankingTab {
   key: RankingKey;
@@ -25,9 +25,9 @@ interface RankingTab {
 
 const rankingTabs: RankingTab[] = [
   {
-    key: "overall",
-    label: "Overall",
-    description: "Balanced Civic Genome score across public health signals.",
+    key: "civic_health",
+    label: "Civic Health",
+    description: "Area condition across infrastructure, cleanliness, safety, environment, and responsiveness.",
   },
   {
     key: "safety",
@@ -40,9 +40,9 @@ const rankingTabs: RankingTab[] = [
     description: "Highlights sanitation, waste, and cleanliness progress.",
   },
   {
-    key: "participation",
-    label: "Participation",
-    description: "Highlights areas where residents are actively helping verify progress.",
+    key: "community_power",
+    label: "Community Power",
+    description: "Highlights areas where residents are actively verifying, joining missions, and helping progress.",
   },
   {
     key: "responsiveness",
@@ -51,9 +51,15 @@ const rankingTabs: RankingTab[] = [
   },
 ];
 
+function scoreValue(area: AreaSummary, key: RankingKey) {
+  if (key === "civic_health") return area.civic_genome.civic_health_score;
+  if (key === "community_power") return area.civic_genome.community_power_score;
+  return area.scores[key];
+}
+
 function sortedAreas(areas: AreaSummary[], key: RankingKey) {
   return [...areas].sort((left, right) => {
-    const scoreDifference = right.scores[key] - left.scores[key];
+    const scoreDifference = scoreValue(right, key) - scoreValue(left, key);
     if (scoreDifference !== 0) {
       return scoreDifference;
     }
@@ -62,7 +68,7 @@ function sortedAreas(areas: AreaSummary[], key: RankingKey) {
 }
 
 export function RankingsPage() {
-  const [activeKey, setActiveKey] = useState<RankingKey>("overall");
+  const [activeKey, setActiveKey] = useState<RankingKey>("civic_health");
   const areas = useQuery({
     queryKey: ["areas"],
     queryFn: ({ signal }) => getAreas(signal),
@@ -77,7 +83,7 @@ export function RankingsPage() {
   return (
     <section className="page-section rankings-page">
       <Seo
-        description="Browse positive Civic Genome rankings by overall, safety, cleanliness, participation, and responsiveness signals."
+        description="Browse positive Civic Genome rankings by Civic Health, Community Power, safety, cleanliness, and responsiveness signals."
         title="City Rankings"
       />
       <div className="container rankings-layout">
@@ -142,7 +148,7 @@ export function RankingsPage() {
                         {area.resolved_this_week} resolved this week
                       </span>
                     </div>
-                    <AreaScoreBadge score={area.scores[activeKey]} />
+                    <AreaScoreBadge score={scoreValue(area, activeKey)} />
                   </li>
                 ))}
               </ol>

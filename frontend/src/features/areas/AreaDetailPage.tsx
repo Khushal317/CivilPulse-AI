@@ -15,13 +15,12 @@ const scoreLabels: Array<keyof AreaScoreBreakdown> = [
   "infrastructure",
   "cleanliness",
   "safety",
-  "participation",
   "responsiveness",
   "environment",
 ];
 
 const scoreDescriptions: Record<keyof AreaScoreBreakdown, string> = {
-  overall: "Weighted Civic Health Score from all Civic Genome categories.",
+  overall: "Civic Health Score from condition and responsiveness categories.",
   infrastructure: "Roads, streetlights, water systems, and public infrastructure signals.",
   cleanliness: "Garbage, waste, sanitation, and repeated cleanliness reports.",
   safety: "High-risk reports, dark areas, unsafe infrastructure, and school-zone hazards.",
@@ -37,6 +36,7 @@ const eventLabels: Record<string, string> = {
   community_action_fixed: "Fixed confirmation",
   admin_resolved: "Admin resolved",
   admin_rejected: "Admin rejected",
+  admin_duplicate: "Duplicate removed",
   admin_restored: "Admin restored",
   mission_completed: "Mission completed",
   score_recalculated: "Score recalculated",
@@ -48,6 +48,20 @@ function eventLabel(eventType: string) {
 
 function label(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function titleLabel(value: string) {
+  return label(value).replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function confidenceLabel(value: AreaDetail["civic_genome"]["confidence_level"]) {
+  return titleLabel(value);
+}
+
+function scoreEventLabel(scoreKey: keyof AreaScoreBreakdown) {
+  if (scoreKey === "overall") return "Civic Health";
+  if (scoreKey === "participation") return "Community Power";
+  return `${titleLabel(scoreKey)} · Civic Health`;
 }
 
 function safeInsight(area: AreaDetail): AreaInsight {
@@ -74,6 +88,14 @@ function ScoreGrid({ area }: { area: AreaDetail }) {
           <p>{scoreDescriptions[key]}</p>
         </Card>
       ))}
+      <Card as="article" className="area-detail-score-card area-community-score-card">
+        <span>community power</span>
+        <strong>{area.civic_genome.community_power_score}</strong>
+        <p>
+          Resident verification, unresolved/fixed confirmations, mission participation,
+          and volunteer action signals.
+        </p>
+      </Card>
     </div>
   );
 }
@@ -146,8 +168,43 @@ export function AreaDetailPage() {
               <span>{data.total_issues} total reports</span>
             </div>
           </div>
-          <AreaScoreBadge score={data.scores.overall} />
+          <AreaScoreBadge score={data.civic_genome.civic_health_score} />
         </header>
+
+        <div className="area-genome-summary-grid">
+          <Card padding="large">
+            <p className="eyebrow">Civic Health Score</p>
+            <strong>{data.civic_genome.civic_health_score}/100</strong>
+            <p>
+              Overall area condition from infrastructure, cleanliness, safety,
+              environment, and responsiveness.
+            </p>
+          </Card>
+          <Card padding="large">
+            <p className="eyebrow">Community Power Score</p>
+            <strong>{data.civic_genome.community_power_score}/100</strong>
+            <p>
+              How active and helpful residents are through verifications, missions,
+              and useful public signals.
+            </p>
+          </Card>
+          <Card padding="large">
+            <p className="eyebrow">Confidence</p>
+            <strong>{confidenceLabel(data.civic_genome.confidence_level)}</strong>
+            <p>{data.civic_genome.confidence_reason}</p>
+          </Card>
+        </div>
+
+        {data.civic_genome.score_limit_reasons.length ? (
+          <Card className="area-score-limit-card" padding="large">
+            <p className="eyebrow">Score limited because</p>
+            <ul className="mission-linked-list">
+              {data.civic_genome.score_limit_reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </Card>
+        ) : null}
 
         <ScoreGrid area={data} />
 
@@ -172,14 +229,14 @@ export function AreaDetailPage() {
         <div className="area-detail-grid">
           <Card padding="large">
             <p className="eyebrow">Score activity</p>
-            <h2>Recent Civic Genome events</h2>
+            <h2>Why this score changed</h2>
             {data.recent_score_events.length ? (
               <ul className="area-event-list">
                 {data.recent_score_events.map((event) => (
                   <li key={event.id}>
                     <span className="area-event-type">{eventLabel(event.event_type)}</span>
                     <strong>
-                      {event.score_key.replace("_", " ")}{" "}
+                      {scoreEventLabel(event.score_key)}{" "}
                       {event.score_change > 0 ? "+" : ""}
                       {event.score_change}
                     </strong>

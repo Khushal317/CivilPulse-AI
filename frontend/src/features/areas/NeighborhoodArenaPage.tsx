@@ -11,13 +11,9 @@ import { AreaScoreBadge } from "./AreaScoreBadge";
 import { statusLabel } from "./areaLabels";
 import type { AreaSummary } from "./types";
 
-const scoreLabels: Array<keyof AreaSummary["scores"]> = [
-  "infrastructure",
-  "cleanliness",
-  "safety",
-  "participation",
-  "responsiveness",
-];
+function titleLabel(value: string) {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 function AreaCard({ area }: { area: AreaSummary }) {
   return (
@@ -27,7 +23,7 @@ function AreaCard({ area }: { area: AreaSummary }) {
           <p className="eyebrow">{area.city}</p>
           <h2>{area.name}</h2>
         </div>
-        <AreaScoreBadge score={area.scores.overall} />
+        <AreaScoreBadge score={area.civic_genome.civic_health_score} />
       </div>
 
       <div className="area-card-meta">
@@ -35,13 +31,19 @@ function AreaCard({ area }: { area: AreaSummary }) {
         <span>{statusLabel(area.status_label)}</span>
       </div>
 
-      <dl className="area-score-list">
-        {scoreLabels.map((key) => (
-          <div key={key}>
-            <dt>{key.replace("_", " ")}</dt>
-            <dd>{area.scores[key]}</dd>
-          </div>
-        ))}
+      <dl className="area-score-list area-primary-score-list">
+        <div>
+          <dt>Civic Health</dt>
+          <dd>{area.civic_genome.civic_health_score}/100</dd>
+        </div>
+        <div>
+          <dt>Community Power</dt>
+          <dd>{area.civic_genome.community_power_score}/100</dd>
+        </div>
+        <div>
+          <dt>Confidence</dt>
+          <dd>{titleLabel(area.civic_genome.confidence_level)}</dd>
+        </div>
       </dl>
 
       <div className="area-card-stats">

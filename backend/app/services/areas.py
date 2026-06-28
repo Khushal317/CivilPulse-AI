@@ -14,6 +14,7 @@ from app.models.mission import Mission
 from app.repositories.areas import AreaRecord, AreaRepository
 from app.schemas.areas import (
     AreaActiveIssueResponse,
+    AreaCivicGenomeProfile,
     AreaDetail,
     AreaInsightResponse,
     AreaListResponse,
@@ -29,7 +30,11 @@ from app.services.area_explanations import (
 from app.services.area_scores import (
     SCORE_FIELD_BY_KEY,
     AreaScoreSnapshot,
+    community_power_score,
     compute_area_score_snapshot,
+    confidence_level,
+    confidence_reason,
+    score_limit_evaluation,
     status_label,
 )
 
@@ -82,11 +87,36 @@ def summary(record: AreaRecord) -> AreaSummary:
         rank=area.rank,
         status_label=area.status_label,
         scores=scores(area),
+        civic_genome=civic_genome_profile(record),
         open_issues=record.open_issues,
         resolved_this_week=record.resolved_this_week,
         active_missions=record.active_missions,
         created_at=area.created_at,
         updated_at=area.updated_at,
+    )
+
+
+def civic_genome_profile(record: AreaRecord) -> AreaCivicGenomeProfile:
+    community_action_count = record.community_action_count or sum(
+        len(issue.community_actions) for issue in record.area.issues
+    )
+    mission_action_count = record.mission_action_count or sum(
+        len(mission.actions) for mission in record.area.missions
+    )
+    activity_count = record.total_issues + community_action_count + mission_action_count
+    confidence = confidence_level(activity_count)
+    limits = score_limit_evaluation(list(record.area.issues), current_time=now_utc())
+    return AreaCivicGenomeProfile(
+        civic_health_score=record.area.overall_score,
+        community_power_score=community_power_score(
+            participation_score=record.area.participation_score,
+            community_action_count=community_action_count,
+            mission_action_count=mission_action_count,
+            active_missions=record.active_missions,
+        ),
+        confidence_level=confidence,
+        confidence_reason=confidence_reason(confidence),
+        score_limit_reasons=list(limits.reasons),
     )
 
 
@@ -151,6 +181,7 @@ class AreaService:
             active_issues=[active_issue_response(issue) for issue in active_issues],
             insight=self._area_insight(
                 record,
+                civic_genome=item.civic_genome,
                 recent_score_events=recent_score_events,
                 active_issues=active_issues,
             ),
@@ -282,6 +313,7 @@ class AreaService:
         self,
         record: AreaRecord,
         *,
+        civic_genome: AreaCivicGenomeProfile,
         recent_score_events: list[AreaScoreEvent],
         active_issues: list[Issue],
     ) -> AreaInsightResponse:
@@ -291,6 +323,7 @@ class AreaService:
         return explainer.explain(
             AreaInsightInput(
                 area=record.area,
+                civic_genome=civic_genome,
                 open_issues=record.open_issues,
                 resolved_this_week=record.resolved_this_week,
                 active_missions=record.active_missions,

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.db.base import Base
-from app.domain.areas import AreaScoreKey, AreaStatusLabel, area_slug
+from app.domain.areas import BASELINE_AREA_SCORE, AreaScoreKey, AreaStatusLabel, area_slug
 from app.domain.enums import (
     CommunityActionType,
     IssueCategory,
@@ -25,9 +25,11 @@ from app.repositories.areas import SQLAlchemyAreaRepository
 from app.services.area_scores import (
     clamp_score,
     compute_area_score_snapshot,
+    confidence_level,
     issue_category_score_impact,
     mission_reward_score_impact,
     overall_score,
+    score_limit_evaluation,
     status_label,
 )
 from app.services.areas import AreaService
@@ -43,20 +45,20 @@ def score_session() -> Generator[Session]:
     engine.dispose()
 
 
-def make_area(number: int, name: str, *, overall: int = 70) -> Area:
+def make_area(number: int, name: str, *, overall: int = BASELINE_AREA_SCORE) -> Area:
     return Area(
         id=UUID(int=number),
         name=name,
         slug=area_slug(name),
         city="CivicPulse City",
         overall_score=overall,
-        infrastructure_score=70,
-        cleanliness_score=70,
-        safety_score=70,
-        participation_score=70,
-        responsiveness_score=70,
-        environment_score=70,
-        status_label="improving",
+        infrastructure_score=BASELINE_AREA_SCORE,
+        cleanliness_score=BASELINE_AREA_SCORE,
+        safety_score=BASELINE_AREA_SCORE,
+        participation_score=BASELINE_AREA_SCORE,
+        responsiveness_score=BASELINE_AREA_SCORE,
+        environment_score=BASELINE_AREA_SCORE,
+        status_label="stable",
     )
 
 
@@ -143,7 +145,7 @@ def test_score_helpers_are_deterministic() -> None:
             AreaScoreKey.RESPONSIVENESS: 55,
             AreaScoreKey.ENVIRONMENT: 72,
         },
-    ) == 70
+    ) == 67
     assert status_label(90) is AreaStatusLabel.THRIVING
     assert status_label(70) is AreaStatusLabel.IMPROVING
     assert status_label(55) is AreaStatusLabel.STABLE
@@ -197,12 +199,12 @@ def test_compute_area_score_snapshot_uses_issues_and_participation() -> None:
         current_time=datetime(2026, 6, 27, 10, tzinfo=UTC),
     )
 
-    assert snapshot.scores[AreaScoreKey.INFRASTRUCTURE] == 66
-    assert snapshot.scores[AreaScoreKey.CLEANLINESS] == 72
-    assert snapshot.scores[AreaScoreKey.SAFETY] == 68
-    assert snapshot.scores[AreaScoreKey.PARTICIPATION] == 73
-    assert snapshot.scores[AreaScoreKey.RESPONSIVENESS] == 67
-    assert snapshot.scores[AreaScoreKey.OVERALL] == 69
+    assert snapshot.scores[AreaScoreKey.INFRASTRUCTURE] == 46
+    assert snapshot.scores[AreaScoreKey.CLEANLINESS] == 52
+    assert snapshot.scores[AreaScoreKey.SAFETY] == 48
+    assert snapshot.scores[AreaScoreKey.PARTICIPATION] == 53
+    assert snapshot.scores[AreaScoreKey.RESPONSIVENESS] == 47
+    assert snapshot.scores[AreaScoreKey.OVERALL] == 48
 
 
 def test_completed_mission_rewards_are_part_of_score_snapshot() -> None:
@@ -216,8 +218,8 @@ def test_completed_mission_rewards_are_part_of_score_snapshot() -> None:
     )
 
     assert mission_reward_score_impact(mission) == {AreaScoreKey.PARTICIPATION: 20}
-    assert snapshot.scores[AreaScoreKey.PARTICIPATION] == 90
-    assert snapshot.scores[AreaScoreKey.OVERALL] == 73
+    assert snapshot.scores[AreaScoreKey.PARTICIPATION] == 70
+    assert snapshot.scores[AreaScoreKey.OVERALL] == 50
 
 
 def test_mission_rewards_ignore_invalid_keys_and_cap_points() -> None:
@@ -235,8 +237,56 @@ def test_mission_rewards_ignore_invalid_keys_and_cap_points() -> None:
     assert mission_reward_score_impact(huge) == {AreaScoreKey.SAFETY: 20}
     assert mission_reward_score_impact(overall) == {}
     assert mission_reward_score_impact(unknown) == {}
-    assert snapshot.scores[AreaScoreKey.SAFETY] == 90
-    assert snapshot.scores[AreaScoreKey.OVERALL] == 74
+    assert snapshot.scores[AreaScoreKey.SAFETY] == 70
+    assert snapshot.scores[AreaScoreKey.OVERALL] == 55
+
+
+def test_score_limits_cap_dangerous_unresolved_issues() -> None:
+    area = make_area(1, "Sector 12")
+    critical_old = make_issue(
+        1,
+        area,
+        severity=IssueSeverity.CRITICAL,
+        created_at=datetime(2026, 6, 23, 10, tzinfo=UTC),
+    )
+    high_issues = [
+        make_issue(
+            number,
+            area,
+            severity=IssueSeverity.HIGH,
+            created_at=datetime(2026, 6, 27, 10, tzinfo=UTC),
+        )
+        for number in (2, 3, 4)
+    ]
+    very_old_medium = make_issue(
+        5,
+        area,
+        severity=IssueSeverity.MEDIUM,
+        created_at=datetime(2026, 6, 10, 10, tzinfo=UTC),
+    )
+
+    limits = score_limit_evaluation(
+        [critical_old, *high_issues, very_old_medium],
+        current_time=datetime(2026, 6, 27, 10, tzinfo=UTC),
+    )
+    snapshot = compute_area_score_snapshot(
+        [critical_old, *high_issues, very_old_medium],
+        current_time=datetime(2026, 6, 27, 10, tzinfo=UTC),
+    )
+
+    assert limits.civic_health_cap == 75
+    assert limits.responsiveness_cap == 60
+    assert "1 critical issue older than 3 days" in limits.reasons
+    assert "3 unresolved high-severity issues" in limits.reasons
+    assert "1 unresolved issue older than 14 days" in limits.reasons
+    assert snapshot.scores[AreaScoreKey.OVERALL] <= 75
+    assert snapshot.scores[AreaScoreKey.RESPONSIVENESS] <= 60
+
+
+def test_confidence_levels_follow_activity_volume() -> None:
+    assert confidence_level(2) == "low"
+    assert confidence_level(3) == "medium"
+    assert confidence_level(10) == "high"
 
 
 def test_area_service_recalculates_scores_events_and_ranks(score_session: Session) -> None:
@@ -266,7 +316,7 @@ def test_area_service_recalculates_scores_events_and_ranks(score_session: Sessio
     assert count == 2
     assert green.rank == 1
     assert sector.rank == 2
-    assert sector.status_label == "stable"
+    assert sector.status_label == "needs_attention"
     events = SQLAlchemyAreaRepository(score_session).recent_score_events(sector.id, limit=10)
     changed_keys = {event.score_key for event in events}
     assert AreaScoreKey.INFRASTRUCTURE in changed_keys
@@ -315,9 +365,9 @@ def test_completed_mission_reward_records_events_and_updates_rank(
 
     events = SQLAlchemyAreaRepository(score_session).recent_score_events(sector.id, limit=10)
     mission_events = [event for event in events if event.event_type == "mission_completed"]
-    assert result.scores.participation == 90
-    assert sector.rank == 1
-    assert green.rank == 2
+    assert result.scores.participation == 70
+    assert sector.rank == 2
+    assert green.rank == 1
     assert mission_events
     assert {event.related_mission_id for event in mission_events} == {sector.missions[0].id}
     assert all("mission completed" in event.reason.lower() for event in mission_events)
@@ -368,20 +418,20 @@ def test_rejected_issue_reverses_active_penalty_without_positive_score_farming(
     service = AreaService(SQLAlchemyAreaRepository(score_session))
 
     service.recalculate_issue_area(issue, event_type="issue_published")
-    assert area.infrastructure_score < 70
-    assert area.overall_score < 70
+    assert area.infrastructure_score < BASELINE_AREA_SCORE
+    assert area.overall_score < BASELINE_AREA_SCORE
 
     issue.status = IssueStatus.REJECTED
     service.recalculate_issue_area(issue, event_type="admin_rejected")
     score_session.commit()
 
-    assert area.infrastructure_score == 70
-    assert area.safety_score == 70
-    assert area.overall_score == 70
+    assert area.infrastructure_score == BASELINE_AREA_SCORE
+    assert area.safety_score == BASELINE_AREA_SCORE
+    assert area.overall_score == BASELINE_AREA_SCORE
     events = SQLAlchemyAreaRepository(score_session).recent_score_events(area.id, limit=10)
     rejection_events = [event for event in events if event.event_type == "admin_rejected"]
     assert rejection_events
-    assert all(event.new_score <= 70 for event in rejection_events)
+    assert all(event.new_score <= BASELINE_AREA_SCORE for event in rejection_events)
 
 
 def test_recalculate_area_scores_missing_area_raises(score_session: Session) -> None:

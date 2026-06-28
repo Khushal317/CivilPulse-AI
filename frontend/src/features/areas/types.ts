@@ -8,6 +8,14 @@ export interface AreaScoreBreakdown {
   environment: number;
 }
 
+export interface AreaCivicGenomeProfile {
+  civic_health_score: number;
+  community_power_score: number;
+  confidence_level: "low" | "medium" | "high";
+  confidence_reason: string;
+  score_limit_reasons: string[];
+}
+
 export interface AreaSummary {
   id: string;
   name: string;
@@ -16,6 +24,7 @@ export interface AreaSummary {
   rank: number | null;
   status_label: string;
   scores: AreaScoreBreakdown;
+  civic_genome: AreaCivicGenomeProfile;
   open_issues: number;
   resolved_this_week: number;
   active_missions: number;

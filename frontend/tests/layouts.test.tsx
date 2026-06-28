@@ -57,6 +57,13 @@ vi.stubGlobal(
             responsiveness: 70,
             environment: 70,
           },
+          civic_genome: {
+            civic_health_score: 70,
+            community_power_score: 70,
+            confidence_level: "low",
+            confidence_reason: "This score is based on limited activity.",
+            score_limit_reasons: [],
+          },
           open_issues: 0,
           resolved_this_week: 0,
           active_missions: 0,

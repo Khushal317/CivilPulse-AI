@@ -1,5 +1,6 @@
 from app.schemas.areas import (
     AreaActiveIssueResponse,
+    AreaCivicGenomeProfile,
     AreaDetail,
     AreaListResponse,
     AreaScoreBreakdown,
@@ -34,6 +35,7 @@ __all__ = [
     "AIAnalysis",
     "APIModel",
     "AreaActiveIssueResponse",
+    "AreaCivicGenomeProfile",
     "AreaDetail",
     "AreaListResponse",
     "AreaScoreBreakdown",

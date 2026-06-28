@@ -965,6 +965,12 @@
   font-weight: 800;
 }
 
+.area-primary-score-list {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-soft);
+}
+
 .area-card-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1022,6 +1028,34 @@
   max-width: 760px;
 }
 
+.area-genome-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-5);
+}
+
+.area-genome-summary-grid .card {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.area-genome-summary-grid strong {
+  color: var(--color-brand);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1;
+}
+
+.area-genome-summary-grid p:not(.eyebrow) {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.55;
+}
+
+.area-score-limit-card {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+}
+
 .area-detail-score-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1050,6 +1084,11 @@
   margin: 0;
   color: var(--color-muted);
   line-height: 1.55;
+}
+
+.area-community-score-card {
+  border-color: rgb(23 100 60 / 0.24);
+  background: linear-gradient(135deg, rgb(23 100 60 / 0.08), var(--color-surface));
 }
 
 .area-detail-grid {
@@ -1795,6 +1834,7 @@
 
 @media (max-width: 900px) {
   .area-grid,
+  .area-genome-summary-grid,
   .area-detail-score-grid,
   .area-detail-grid,
   .mission-grid {
@@ -1904,6 +1944,7 @@
   .admin-metric-grid,
   .admin-dashboard-grid,
   .area-grid,
+  .area-genome-summary-grid,
   .area-detail-score-grid,
   .area-detail-grid,
   .mission-grid,

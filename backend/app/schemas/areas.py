@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import Field
@@ -18,6 +19,14 @@ class AreaScoreBreakdown(APIModel):
     environment: int = Field(ge=0, le=100)
 
 
+class AreaCivicGenomeProfile(APIModel):
+    civic_health_score: int = Field(ge=0, le=100)
+    community_power_score: int = Field(ge=0, le=100)
+    confidence_level: Literal["low", "medium", "high"]
+    confidence_reason: str
+    score_limit_reasons: list[str] = Field(default_factory=list)
+
+
 class AreaSummary(APIModel):
     id: UUID
     name: str
@@ -26,6 +35,7 @@ class AreaSummary(APIModel):
     rank: int | None
     status_label: str
     scores: AreaScoreBreakdown
+    civic_genome: AreaCivicGenomeProfile
     open_issues: int = Field(ge=0)
     resolved_this_week: int = Field(ge=0)
     active_missions: int = Field(default=0, ge=0)

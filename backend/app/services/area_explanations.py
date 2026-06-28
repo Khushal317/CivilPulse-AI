@@ -11,7 +11,7 @@ from app.core.config import Settings, get_settings
 from app.models.area import Area
 from app.models.area_score_event import AreaScoreEvent
 from app.models.issue import Issue
-from app.schemas.areas import AreaInsightResponse
+from app.schemas.areas import AreaCivicGenomeProfile, AreaInsightResponse
 from app.schemas.common import APIModel
 
 AREA_EXPLANATION_SYSTEM_INSTRUCTION = """
@@ -41,6 +41,7 @@ class AreaInsightPayload(APIModel):
 @dataclass(frozen=True, slots=True)
 class AreaInsightInput:
     area: Area
+    civic_genome: AreaCivicGenomeProfile
     open_issues: int
     resolved_this_week: int
     active_missions: int
@@ -87,7 +88,11 @@ def area_explanation_prompt(context: AreaInsightInput) -> str:
             "rank": area.rank,
             "status_label": area.status_label,
             "scores": {
-                "overall": area.overall_score,
+                "civic_health": context.civic_genome.civic_health_score,
+                "community_power": context.civic_genome.community_power_score,
+                "confidence": context.civic_genome.confidence_level,
+                "confidence_reason": context.civic_genome.confidence_reason,
+                "score_limit_reasons": context.civic_genome.score_limit_reasons,
                 "infrastructure": area.infrastructure_score,
                 "cleanliness": area.cleanliness_score,
                 "safety": area.safety_score,
@@ -113,7 +118,8 @@ def area_explanation_prompt(context: AreaInsightInput) -> str:
         "Use constructive language and avoid harmful neighborhood labels.\n\n"
         "Required JSON shape:\n"
         "{\n"
-        '  "explanation": "plain-language explanation of current civic health",\n'
+        '  "explanation": "plain-language explanation of Civic Health, Community '
+        'Power, confidence, and score limits",\n'
         '  "next_best_actions": ["safe useful next action", "another action"]\n'
         "}\n\n"
         f"Public Civic Genome context JSON:\n{json.dumps(payload, ensure_ascii=False)}"
@@ -125,28 +131,21 @@ class DemoCivicAreaExplainer:
 
     def explain(self, context: AreaInsightInput) -> AreaInsightResponse:
         area = context.area
+        civic_health_scores = (
+            ("infrastructure", area.infrastructure_score),
+            ("cleanliness", area.cleanliness_score),
+            ("safety", area.safety_score),
+            ("responsiveness", area.responsiveness_score),
+            ("environment", area.environment_score),
+        )
         strongest_score = max(
             (
-                ("infrastructure", area.infrastructure_score),
-                ("cleanliness", area.cleanliness_score),
-                ("safety", area.safety_score),
-                ("participation", area.participation_score),
-                ("responsiveness", area.responsiveness_score),
-                ("environment", area.environment_score),
+                *civic_health_scores,
+                ("community power", context.civic_genome.community_power_score),
             ),
             key=lambda item: item[1],
         )
-        lowest_score = min(
-            (
-                ("infrastructure", area.infrastructure_score),
-                ("cleanliness", area.cleanliness_score),
-                ("safety", area.safety_score),
-                ("participation", area.participation_score),
-                ("responsiveness", area.responsiveness_score),
-                ("environment", area.environment_score),
-            ),
-            key=lambda item: item[1],
-        )
+        lowest_health_score = min(civic_health_scores, key=lambda item: item[1])
         actions = [
             (
                 f"Review the newest public issues in {area.name} and verify what "
@@ -154,18 +153,23 @@ class DemoCivicAreaExplainer:
             ),
             "Join or complete active community missions to strengthen useful public signals.",
             (
-                f"Focus next on {lowest_score[0].replace('_', ' ')} because it is "
-                "the area's lowest current score."
+                f"Focus next on {lowest_health_score[0].replace('_', ' ')} because it is "
+                "the area's lowest current Civic Health signal."
             ),
         ]
         if context.open_issues:
             actions.append("Coordinate admin follow-up for high-priority open issues.")
         return AreaInsightResponse(
             explanation=(
-                f"{area.name} has an overall Civic Genome score of {area.overall_score}. "
+                f"{area.name} has a Civic Health Score of "
+                f"{context.civic_genome.civic_health_score} and a Community Power Score of "
+                f"{context.civic_genome.community_power_score}. "
                 f"Its strongest current signal is {strongest_score[0].replace('_', ' ')} "
-                f"at {strongest_score[1]}, while {lowest_score[0].replace('_', ' ')} "
-                f"at {lowest_score[1]} is the clearest improvement opportunity. "
+                f"at {strongest_score[1]}, while "
+                f"{lowest_health_score[0].replace('_', ' ')} at {lowest_health_score[1]} "
+                "is the clearest Civic Health improvement opportunity. "
+                f"Confidence is {context.civic_genome.confidence_level}: "
+                f"{context.civic_genome.confidence_reason} "
                 f"There are {context.open_issues} open issue(s), {context.resolved_this_week} "
                 f"resolved this week, and {context.active_missions} active mission(s)."
             ),
@@ -220,6 +224,10 @@ class SafeFallbackAreaExplainer:
         cache_key = (
             context.area.id,
             context.area.updated_at,
+            context.civic_genome.civic_health_score,
+            context.civic_genome.community_power_score,
+            context.civic_genome.confidence_level,
+            tuple(context.civic_genome.score_limit_reasons),
             context.open_issues,
             context.resolved_this_week,
             context.active_missions,

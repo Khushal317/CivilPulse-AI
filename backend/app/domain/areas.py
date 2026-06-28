@@ -3,7 +3,7 @@ import unicodedata
 from enum import StrEnum
 
 DEFAULT_AREA_CITY = "CivicPulse City"
-BASELINE_AREA_SCORE = 70
+BASELINE_AREA_SCORE = 50
 
 
 class AreaScoreKey(StrEnum):

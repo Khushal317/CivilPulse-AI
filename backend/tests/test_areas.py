@@ -41,7 +41,7 @@ def make_area(name: str = "Sector 12") -> Area:
         responsiveness_score=70,
         environment_score=70,
         rank=1,
-        status_label="improving",
+        status_label="stable",
         score_events=[],
     )
 
@@ -95,7 +95,7 @@ def test_get_or_create_area_for_location_is_idempotent(area_session: Session) ->
 
     assert first.id == second.id
     assert first.name == "Sector 12"
-    assert first.overall_score == 70
+    assert first.overall_score == 50
     assert first.status_label == "improving"
 
 

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from typing import Literal
 
 from app.domain.areas import BASELINE_AREA_SCORE, AreaScoreKey, AreaStatusLabel
 from app.domain.enums import CommunityActionType, IssueCategory, IssueSeverity, IssueStatus
@@ -15,13 +16,20 @@ COMPONENT_SCORE_KEYS = (
     AreaScoreKey.ENVIRONMENT,
 )
 
-SCORE_WEIGHTS = {
-    AreaScoreKey.INFRASTRUCTURE: 0.20,
-    AreaScoreKey.CLEANLINESS: 0.15,
-    AreaScoreKey.SAFETY: 0.20,
-    AreaScoreKey.PARTICIPATION: 0.15,
-    AreaScoreKey.RESPONSIVENESS: 0.20,
+HEALTH_SCORE_KEYS = (
+    AreaScoreKey.INFRASTRUCTURE,
+    AreaScoreKey.CLEANLINESS,
+    AreaScoreKey.SAFETY,
+    AreaScoreKey.ENVIRONMENT,
+    AreaScoreKey.RESPONSIVENESS,
+)
+
+HEALTH_SCORE_WEIGHTS = {
+    AreaScoreKey.INFRASTRUCTURE: 0.25,
+    AreaScoreKey.CLEANLINESS: 0.20,
+    AreaScoreKey.SAFETY: 0.25,
     AreaScoreKey.ENVIRONMENT: 0.10,
+    AreaScoreKey.RESPONSIVENESS: 0.20,
 }
 
 SCORE_FIELD_BY_KEY = {
@@ -62,13 +70,61 @@ class AreaScoreSnapshot:
     reason: str
 
 
+@dataclass(frozen=True, slots=True)
+class ScoreLimitEvaluation:
+    civic_health_cap: int | None
+    responsiveness_cap: int | None
+    reasons: tuple[str, ...]
+
+
+ConfidenceLevel = Literal["low", "medium", "high"]
+
+
 def clamp_score(value: float | int) -> int:
     return max(0, min(100, round(value)))
 
 
 def overall_score(component_scores: dict[AreaScoreKey, int]) -> int:
     return clamp_score(
-        sum(component_scores[key] * weight for key, weight in SCORE_WEIGHTS.items()),
+        sum(component_scores[key] * weight for key, weight in HEALTH_SCORE_WEIGHTS.items()),
+    )
+
+
+def community_power_score(
+    *,
+    participation_score: int,
+    community_action_count: int,
+    mission_action_count: int,
+    active_missions: int,
+) -> int:
+    activity_score = (
+        BASELINE_AREA_SCORE
+        + min(35, community_action_count * 3)
+        + min(20, mission_action_count * 4)
+        + min(10, active_missions * 2)
+    )
+    return clamp_score(max(participation_score, activity_score))
+
+
+def confidence_level(total_activity: int) -> ConfidenceLevel:
+    if total_activity >= 10:
+        return "high"
+    if total_activity >= 3:
+        return "medium"
+    return "low"
+
+
+def confidence_reason(level: ConfidenceLevel) -> str:
+    if level == "high":
+        return "This score is supported by strong local reporting and participation activity."
+    if level == "medium":
+        return (
+            "This score is based on moderate activity and may shift as more residents "
+            "participate."
+        )
+    return (
+        "This score is based on limited activity, so it may change quickly as more "
+        "local signals arrive."
     )
 
 
@@ -147,10 +203,78 @@ def compute_area_score_snapshot(
         _apply_completed_mission_reward(components, mission)
 
     clamped_components = {key: clamp_score(value) for key, value in components.items()}
-    clamped_components[AreaScoreKey.OVERALL] = overall_score(clamped_components)
+    limits = score_limit_evaluation(issues, current_time=current_time)
+    if limits.responsiveness_cap is not None:
+        clamped_components[AreaScoreKey.RESPONSIVENESS] = min(
+            clamped_components[AreaScoreKey.RESPONSIVENESS],
+            limits.responsiveness_cap,
+        )
+    health_score = overall_score(clamped_components)
+    if limits.civic_health_cap is not None:
+        health_score = min(health_score, limits.civic_health_cap)
+    clamped_components[AreaScoreKey.OVERALL] = health_score
     return AreaScoreSnapshot(
         scores=clamped_components,
         reason="Recalculated from current issue status, severity, age, and community activity.",
+    )
+
+
+def score_limit_evaluation(
+    issues: list[Issue],
+    *,
+    current_time: datetime,
+) -> ScoreLimitEvaluation:
+    if current_time.tzinfo is None:
+        current_time = current_time.replace(tzinfo=UTC)
+    active_issues = [issue for issue in issues if issue.status in ACTIVE_STATUSES]
+    critical_count = 0
+    high_count = 0
+    old_critical_count = 0
+    old_unresolved_count = 0
+    for issue in active_issues:
+        created_at = issue.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        age_days = max(0, (current_time - created_at).days)
+        if issue.severity is IssueSeverity.CRITICAL:
+            critical_count += 1
+            if age_days > 3:
+                old_critical_count += 1
+        if issue.severity is IssueSeverity.HIGH:
+            high_count += 1
+        if age_days > 14:
+            old_unresolved_count += 1
+
+    health_caps: list[int] = []
+    reasons: list[str] = []
+    if critical_count:
+        health_caps.append(82)
+        reasons.append(
+            f"{critical_count} unresolved critical issue"
+            f"{'' if critical_count == 1 else 's'}",
+        )
+    if high_count >= 3:
+        health_caps.append(78)
+        reasons.append(f"{high_count} unresolved high-severity issues")
+    if old_critical_count:
+        health_caps.append(75)
+        reasons.append(
+            f"{old_critical_count} critical issue"
+            f"{'' if old_critical_count == 1 else 's'} older than 3 days",
+        )
+
+    responsiveness_cap = None
+    if old_unresolved_count:
+        responsiveness_cap = 60
+        reasons.append(
+            f"{old_unresolved_count} unresolved issue"
+            f"{'' if old_unresolved_count == 1 else 's'} older than 14 days",
+        )
+
+    return ScoreLimitEvaluation(
+        civic_health_cap=min(health_caps) if health_caps else None,
+        responsiveness_cap=responsiveness_cap,
+        reasons=tuple(reasons),
     )
 
 

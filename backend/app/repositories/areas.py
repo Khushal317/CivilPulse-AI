@@ -12,8 +12,10 @@ from app.domain.enums import IssueStatus
 from app.domain.missions import MissionStatus
 from app.models.area import Area
 from app.models.area_score_event import AreaScoreEvent
+from app.models.community_action import CommunityAction
 from app.models.issue import Issue
 from app.models.mission import Mission
+from app.models.mission_action import MissionAction
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +24,8 @@ class AreaRecord:
     open_issues: int
     resolved_this_week: int
     total_issues: int
+    community_action_count: int = 0
+    mission_action_count: int = 0
     active_missions: int = 0
     recent_score_events: list[AreaScoreEvent] | None = None
     active_issues: list[Issue] | None = None
@@ -53,10 +57,24 @@ class SQLAlchemyAreaRepository:
         open_count = self._open_issue_count()
         resolved_count = self._resolved_issue_count(resolved_since)
         total_count = func.count(Issue.id).label("total_issues")
+        community_actions = self._community_action_count()
+        mission_actions = self._mission_action_count()
         active_missions = self._active_mission_count()
         rows = self._session.execute(
-            select(Area, open_count, resolved_count, total_count, active_missions)
+            select(
+                Area,
+                open_count,
+                resolved_count,
+                total_count,
+                community_actions,
+                mission_actions,
+                active_missions,
+            )
             .outerjoin(Issue, Issue.area_id == Area.id)
+            .options(
+                selectinload(Area.issues),
+                selectinload(Area.missions).selectinload(Mission.actions),
+            )
             .group_by(Area.id)
             .order_by(Area.rank.is_(None), Area.rank.asc(), Area.name.asc()),
         ).all()
@@ -66,30 +84,64 @@ class SQLAlchemyAreaRepository:
                 open_issues=open_issues,
                 resolved_this_week=resolved_this_week,
                 total_issues=total_issues,
+                community_action_count=community_action_count,
+                mission_action_count=mission_action_count,
                 active_missions=active_missions,
             )
-            for area, open_issues, resolved_this_week, total_issues, active_missions in rows
+            for (
+                area,
+                open_issues,
+                resolved_this_week,
+                total_issues,
+                community_action_count,
+                mission_action_count,
+                active_missions,
+            ) in rows
         ]
 
     def get_by_slug(self, slug: str, *, resolved_since: datetime) -> AreaRecord | None:
         open_count = self._open_issue_count()
         resolved_count = self._resolved_issue_count(resolved_since)
         total_count = func.count(Issue.id).label("total_issues")
+        community_actions = self._community_action_count()
+        mission_actions = self._mission_action_count()
         active_missions = self._active_mission_count()
         row = self._session.execute(
-            select(Area, open_count, resolved_count, total_count, active_missions)
+            select(
+                Area,
+                open_count,
+                resolved_count,
+                total_count,
+                community_actions,
+                mission_actions,
+                active_missions,
+            )
             .outerjoin(Issue, Issue.area_id == Area.id)
             .where(Area.slug == slug)
+            .options(
+                selectinload(Area.issues),
+                selectinload(Area.missions).selectinload(Mission.actions),
+            )
             .group_by(Area.id),
         ).one_or_none()
         if row is None:
             return None
-        area, open_issues, resolved_this_week, total_issues, active_missions = row
+        (
+            area,
+            open_issues,
+            resolved_this_week,
+            total_issues,
+            community_action_count,
+            mission_action_count,
+            active_missions,
+        ) = row
         return AreaRecord(
             area=area,
             open_issues=open_issues,
             resolved_this_week=resolved_this_week,
             total_issues=total_issues,
+            community_action_count=community_action_count,
+            mission_action_count=mission_action_count,
             active_missions=active_missions,
             recent_score_events=self.recent_score_events(area.id, limit=8),
             active_issues=self.active_issues(area.id, limit=6),
@@ -101,7 +153,7 @@ class SQLAlchemyAreaRepository:
             .where(Area.id == area_id)
             .options(
                 selectinload(Area.issues).selectinload(Issue.community_actions),
-                selectinload(Area.missions),
+                selectinload(Area.missions).selectinload(Mission.actions),
             )
             .with_for_update(),
         )
@@ -112,7 +164,7 @@ class SQLAlchemyAreaRepository:
                 select(Area)
                 .options(
                     selectinload(Area.issues).selectinload(Issue.community_actions),
-                    selectinload(Area.missions),
+                    selectinload(Area.missions).selectinload(Mission.actions),
                 )
                 .order_by(Area.name, Area.id)
                 .with_for_update(),
@@ -203,6 +255,30 @@ class SQLAlchemyAreaRepository:
             .correlate(Area)
             .scalar_subquery()
             .label("active_missions"),
+        )
+
+    @staticmethod
+    def _community_action_count() -> ColumnElement[int]:
+        return cast(
+            ColumnElement[int],
+            select(func.count(CommunityAction.id))
+            .join(Issue, CommunityAction.issue_id == Issue.id)
+            .where(Issue.area_id == Area.id)
+            .correlate(Area)
+            .scalar_subquery()
+            .label("community_action_count"),
+        )
+
+    @staticmethod
+    def _mission_action_count() -> ColumnElement[int]:
+        return cast(
+            ColumnElement[int],
+            select(func.count(MissionAction.id))
+            .join(Mission, MissionAction.mission_id == Mission.id)
+            .where(Mission.area_id == Area.id)
+            .correlate(Area)
+            .scalar_subquery()
+            .label("mission_action_count"),
         )
 
 
