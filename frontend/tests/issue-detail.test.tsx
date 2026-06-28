@@ -173,4 +173,42 @@ describe("issue details and community signals", () => {
       expect(button).toBeDisabled();
     }
   });
+
+  it("shows a temporary duplicate redirect to the original issue", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(
+          detail({
+            status: "duplicate",
+            duplicate_marked_at: "2026-06-26T10:00:00Z",
+            duplicate_of: {
+              id: "99999999-9999-4999-8999-999999999999",
+              public_reference: "CP-20260625-00000009",
+              title: "Original school crossing pothole",
+              status: "reported",
+            },
+          }),
+        ),
+      ),
+    );
+    renderDetail();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "This report was merged into the original issue",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Open original issue: CP-20260625-00000009" }),
+    ).toHaveAttribute("href", "/issues/99999999-9999-4999-8999-999999999999");
+    expect(
+      screen.getByText(
+        "Community signals are unavailable because this report is a duplicate. Please follow the original issue instead.",
+      ),
+    ).toBeInTheDocument();
+    for (const button of screen.getAllByRole("button", { name: "Add signal" })) {
+      expect(button).toBeDisabled();
+    }
+  });
 });

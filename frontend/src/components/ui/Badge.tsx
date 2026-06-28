@@ -20,6 +20,7 @@ const statusLabels: Record<IssueStatus, string> = {
   in_progress: "In progress",
   resolved: "Resolved",
   rejected: "Rejected",
+  duplicate: "Duplicate",
 };
 
 interface BadgeProps {
@@ -54,8 +55,8 @@ export function StatusBadge({ status }: { status: IssueStatus }) {
     in_progress: "warning",
     resolved: "success",
     rejected: "danger",
+    duplicate: "warning",
   } as const;
 
   return <Badge tone={tone[status]}>{statusLabels[status]}</Badge>;
 }
-

@@ -14,15 +14,22 @@ from app.domain.enums import (
     IssueStatus,
     UrgencyLevel,
 )
+from app.domain.missions import MissionActionType, MissionStatus, MissionType
 from app.repositories.admin_issues import SQLAlchemyAdminIssueRepository
+from app.repositories.areas import SQLAlchemyAreaRepository
 from app.repositories.issues import SQLAlchemyIssueRepository
+from app.repositories.missions import MissionContext, SQLAlchemyMissionRepository
 from app.repositories.reports import SQLAlchemyReportRepository
 from app.schemas.admin import AdminStatusUpdateRequest
 from app.schemas.issues import AIAnalysis, AIReportInput, ReportAnalysisInput
+from app.schemas.missions import GeneratedMissionCandidate, MissionGenerationPayload
 from app.services.admin import AdminService
 from app.services.ai import CivicIssueAnalyzer
+from app.services.areas import AreaService
 from app.services.images import validate_image
 from app.services.issues import IssueService
+from app.services.mission_generation import MissionGenerationService
+from app.services.missions import MissionService
 from app.services.reports import ReportService
 from app.services.storage import LocalImageStorage
 
@@ -53,6 +60,38 @@ class AcceptanceAnalyzer(CivicIssueAnalyzer):
         )
 
 
+class AcceptanceMissionGenerator:
+    model_name = "acceptance-fake-gemini-mission"
+
+    def generate(self, context: MissionContext) -> MissionGenerationPayload:
+        assert context.areas
+        assert context.active_issues
+        issue = context.active_issues[0]
+        assert issue.area_id is not None
+        return MissionGenerationPayload(
+            missions=[
+                GeneratedMissionCandidate(
+                    title="Verify school gate road safety",
+                    area_id=issue.area_id,
+                    mission_type=MissionType.VERIFICATION,
+                    goal_description=(
+                        "Ask nearby residents to safely confirm whether the school gate "
+                        "road issue is still visible from public space."
+                    ),
+                    target_count=1,
+                    category=IssueCategory.ROAD_DAMAGE,
+                    reward={"points": 20, "score_key": "participation"},
+                    ai_reason=(
+                        "A community-verified road damage report near a school needs one "
+                        "fresh public confirmation before administrators close the loop."
+                    ),
+                    linked_issue_ids=[issue.id],
+                    expires_in_days=7,
+                ),
+            ],
+        )
+
+
 def png_bytes() -> bytes:
     output = BytesIO()
     Image.new("RGB", (8, 8), color=(90, 90, 90)).save(output, format="PNG")
@@ -70,18 +109,28 @@ def test_complete_pothole_near_school_acceptance_flow(tmp_path: Path) -> None:
 
     try:
         with Session(engine) as session:
+            area_repository = SQLAlchemyAreaRepository(session)
+            area_service = AreaService(repository=area_repository)
+            mission_repository = SQLAlchemyMissionRepository(session)
+            mission_service = MissionService(
+                repository=mission_repository,
+                reward_trigger=area_service,
+            )
             report_service = ReportService(
                 repository=SQLAlchemyReportRepository(session),
                 storage=storage,
                 analyzer=AcceptanceAnalyzer(),
                 settings=settings,
+                area_score_trigger=area_service,
             )
             issue_service = IssueService(
                 repository=SQLAlchemyIssueRepository(session),
                 settings=settings,
+                area_score_trigger=area_service,
             )
             admin_service = AdminService(
                 repository=SQLAlchemyAdminIssueRepository(session),
+                area_score_trigger=area_service,
             )
 
             draft = report_service.analyze(
@@ -119,6 +168,44 @@ def test_complete_pothole_near_school_acceptance_flow(tmp_path: Path) -> None:
             admin_detail = admin_service.get_issue(published.issue_id)
             assert admin_detail.citizen_contact == "private@example.com"
             assert admin_detail.verification_count == 3
+
+            mission_generation = MissionGenerationService(
+                mission_repository,
+                AcceptanceMissionGenerator(),
+            ).generate_drafts()
+            draft_mission = mission_generation.created_drafts[0]
+
+            assert mission_generation.model_used == "acceptance-fake-gemini-mission"
+            assert draft_mission.status is MissionStatus.DRAFT
+            assert draft_mission.linked_issue_ids == [published.issue_id]
+
+            active_mission = mission_service.publish(draft_mission.id)
+            mission_action = mission_service.submit_action(
+                active_mission.id,
+                MissionActionType.JOINED,
+                "mission-actor",
+            )
+
+            assert mission_action.accepted is True
+            assert mission_action.mission_status is MissionStatus.COMPLETED
+            assert mission_action.progress_count == 1
+
+            session.expire_all()
+            area_record = area_repository.get_by_slug(
+                "civicpulse-city-sector-12",
+                resolved_since=public_before.created_at,
+            )
+            assert area_record is not None
+            mission_reward_events = [
+                event
+                for event in area_repository.recent_score_events(area_record.area.id, limit=20)
+                if event.event_type == "mission_completed"
+            ]
+            assert any(
+                event.related_mission_id == active_mission.id
+                for event in mission_reward_events
+            )
+            assert area_record.area.participation_score >= 70
 
             for status, note in (
                 (IssueStatus.ESCALATED, "Escalated to Public Works for inspection."),

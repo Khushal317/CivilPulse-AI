@@ -5,7 +5,13 @@ from fastapi.testclient import TestClient
 
 from app.api.dependencies import get_area_service
 from app.main import app
-from app.schemas.areas import AreaDetail, AreaListResponse, AreaScoreBreakdown, AreaSummary
+from app.schemas.areas import (
+    AreaDetail,
+    AreaInsightResponse,
+    AreaListResponse,
+    AreaScoreBreakdown,
+    AreaSummary,
+)
 
 
 def area_summary() -> AreaSummary:
@@ -42,7 +48,15 @@ class FakeAreaService:
 
     def get_public_detail(self, slug: str) -> AreaDetail:
         self.slug = slug
-        return AreaDetail(**area_summary().model_dump(), total_issues=5)
+        return AreaDetail(
+            **area_summary().model_dump(),
+            total_issues=5,
+            insight=AreaInsightResponse(
+                explanation="Sector 12 is improving with useful public civic signals.",
+                next_best_actions=["Verify safe public issues."],
+                model_used="demo-civic-area-explainer-v1",
+            ),
+        )
 
 
 def test_public_area_list_route(client: TestClient) -> None:
@@ -68,3 +82,4 @@ def test_public_area_detail_route(client: TestClient) -> None:
     assert response.status_code == 200
     assert service.slug == "civicpulse-city-sector-12"
     assert response.json()["total_issues"] == 5
+    assert response.json()["insight"]["next_best_actions"] == ["Verify safe public issues."]

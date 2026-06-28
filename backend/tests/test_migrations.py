@@ -43,6 +43,8 @@ def test_initial_migration_generates_postgresql_sql(
     assert "CREATE TABLE areas" in sql
     assert "CREATE TABLE civic_operations_reports" in sql
     assert "CREATE TABLE issues" in sql
+    assert "duplicate_of_issue_id" in sql
+    assert "ix_issues_duplicate_retention" in sql
     assert "CREATE TABLE missions" in sql
     assert "CREATE TABLE mission_actions" in sql
     assert "uq_mission_actions_issue_actor" in sql

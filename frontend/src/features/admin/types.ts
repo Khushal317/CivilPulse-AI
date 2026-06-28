@@ -84,6 +84,17 @@ export interface AdminStatusUpdate {
   rejection_reason?: string;
 }
 
+export interface DuplicateIssueResolutionRequest {
+  canonical_issue_id: string;
+  duplicate_issue_ids: string[];
+  reason: string;
+}
+
+export interface DuplicateIssueResolutionResponse {
+  canonical_issue: AdminIssueSummary;
+  duplicates_marked: AdminIssueSummary[];
+}
+
 export type OperationsRiskLevel = "low" | "medium" | "high" | "critical";
 
 export interface OperationsUrgentIssue {
@@ -162,6 +173,24 @@ export interface OperationsReport {
 export interface MissionGenerationResponse {
   model_used: string;
   created_drafts: MissionDetail[];
+}
+
+export interface ManualMissionDraft {
+  title: string;
+  area_id: string;
+  mission_type: MissionDetail["mission_type"];
+  goal_description: string;
+  target_count: number;
+  category: string | null;
+  reward_points: number;
+  reward_score_key: string;
+  ai_reason: string;
+  linked_issue_ids: string[];
+  expires_in_days: number;
+}
+
+export interface ManualMissionCreate extends ManualMissionDraft {
+  publish: boolean;
 }
 
 export interface AdminMissionListResponse {

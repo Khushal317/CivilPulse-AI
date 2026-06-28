@@ -152,3 +152,39 @@ def test_sorting_and_stable_pagination(tracker_session: Session) -> None:
         (1, 2),
     ]
     assert [record.issue.id.int for record in severity] == [2, 5, 3, 4, 1]
+
+
+def test_duplicate_issues_are_redirect_details_not_tracker_items(
+    tracker_session: Session,
+) -> None:
+    current_time = datetime.now(UTC)
+    original = make_issue(20)
+    recent_duplicate = make_issue(21, status=IssueStatus.DUPLICATE)
+    recent_duplicate.duplicate_of = original
+    recent_duplicate.duplicate_of_issue_id = original.id
+    recent_duplicate.duplicate_marked_at = current_time
+    stale_original = make_issue(22)
+    stale_duplicate = make_issue(23, status=IssueStatus.DUPLICATE)
+    stale_duplicate.duplicate_of = stale_original
+    stale_duplicate.duplicate_of_issue_id = stale_original.id
+    stale_duplicate.duplicate_marked_at = current_time - timedelta(days=3)
+    tracker_session.add_all([original, recent_duplicate, stale_original, stale_duplicate])
+    tracker_session.commit()
+    repository = SQLAlchemyIssueRepository(tracker_session)
+
+    records, total = repository.list_public(IssueListQuery())
+    recent_detail = repository.get_public_detail(recent_duplicate.id)
+    stale_detail = repository.get_public_detail(stale_duplicate.id)
+
+    assert total == 2
+    assert {record.issue.id for record in records} == {original.id, stale_original.id}
+    assert recent_detail is not None
+    assert recent_detail.duplicate_of is not None
+    assert recent_detail.duplicate_of.id == original.id
+    assert stale_detail is None
+
+    original.status = IssueStatus.RESOLVED
+    tracker_session.commit()
+    tracker_session.expire_all()
+
+    assert repository.get_public_detail(recent_duplicate.id) is None

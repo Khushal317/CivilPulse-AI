@@ -271,6 +271,34 @@ def test_invalid_status_does_not_promote_and_rejected_disables_actions() -> None
         )
     assert caught.value.code == "community_actions_unavailable"
 
+    duplicate = make_issue(status=IssueStatus.DUPLICATE)
+    with pytest.raises(AppError) as duplicate_caught:
+        IssueService(FakeIssueRepository(duplicate), Settings()).submit_community_action(
+            duplicate.id,
+            CommunityActionType.SAW_THIS_TOO,
+            "actor",
+        )
+    assert duplicate_caught.value.code == "community_actions_unavailable"
+
+
+def test_duplicate_public_detail_links_to_original_issue() -> None:
+    original = make_issue()
+    original.id = UUID(int=11)
+    duplicate = make_issue(status=IssueStatus.DUPLICATE)
+    duplicate.duplicate_of = original
+    duplicate.duplicate_of_issue_id = original.id
+    duplicate.duplicate_marked_at = datetime(2026, 6, 26, 10, tzinfo=UTC)
+
+    detail = IssueService(FakeIssueRepository(duplicate), Settings()).get_public_detail(
+        duplicate.id,
+        "viewer",
+    )
+
+    assert detail.status is IssueStatus.DUPLICATE
+    assert detail.duplicate_of is not None
+    assert detail.duplicate_of.id == original.id
+    assert detail.duplicate_marked_at == duplicate.duplicate_marked_at
+
 
 def test_rate_limit_and_public_detail_privacy() -> None:
     issue = make_issue()

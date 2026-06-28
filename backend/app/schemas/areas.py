@@ -62,7 +62,14 @@ class AreaActiveIssueResponse(APIModel):
     updated_at: datetime
 
 
+class AreaInsightResponse(APIModel):
+    explanation: str
+    next_best_actions: list[str] = Field(default_factory=list, min_length=1, max_length=5)
+    model_used: str
+
+
 class AreaDetail(AreaSummary):
     total_issues: int = Field(ge=0)
     recent_score_events: list[AreaScoreEventResponse] = Field(default_factory=list)
     active_issues: list[AreaActiveIssueResponse] = Field(default_factory=list)
+    insight: AreaInsightResponse

@@ -6,17 +6,25 @@ from uuid import UUID
 from app.core.errors import AppError
 from app.domain.areas import AreaScoreKey
 from app.domain.enums import IssueStatus
+from app.domain.missions import MissionStatus
 from app.models.area import Area
 from app.models.area_score_event import AreaScoreEvent
 from app.models.issue import Issue
+from app.models.mission import Mission
 from app.repositories.areas import AreaRecord, AreaRepository
 from app.schemas.areas import (
     AreaActiveIssueResponse,
     AreaDetail,
+    AreaInsightResponse,
     AreaListResponse,
     AreaScoreBreakdown,
     AreaScoreEventResponse,
     AreaSummary,
+)
+from app.services.area_explanations import (
+    AreaInsightInput,
+    CivicAreaExplainer,
+    DemoCivicAreaExplainer,
 )
 from app.services.area_scores import (
     SCORE_FIELD_BY_KEY,
@@ -40,8 +48,12 @@ ISSUE_TRIGGER_REASONS = {
     "admin_rejected": (
         "Administrator rejected the issue and removed it from Civic Genome scoring."
     ),
+    "admin_duplicate": (
+        "Administrator marked the issue as a duplicate and removed it from Civic Genome scoring."
+    ),
     "admin_restored": "Administrator restored the issue and returned it to Civic Genome scoring.",
 }
+MISSION_REWARD_REASON = "Community mission completed and reward applied to Civic Genome scoring."
 
 
 def now_utc() -> datetime:
@@ -104,10 +116,13 @@ class AreaScoreTrigger(Protocol):
         event_type: str,
     ) -> AreaSummary | None: ...
 
+    def apply_completed_mission_reward(self, mission: Mission) -> AreaSummary: ...
+
 
 @dataclass(slots=True)
 class AreaService:
     repository: AreaRepository
+    explainer: CivicAreaExplainer | None = None
 
     def list_public(self) -> AreaListResponse:
         records = self.repository.list_public(resolved_since=now_utc() - timedelta(days=7))
@@ -125,13 +140,20 @@ class AreaService:
                 status_code=404,
         )
         item = summary(record)
+        active_issues = record.active_issues or []
+        recent_score_events = record.recent_score_events or []
         return AreaDetail(
             **item.model_dump(),
             total_issues=record.total_issues,
             recent_score_events=[
-                event_response(event) for event in record.recent_score_events or []
+                event_response(event) for event in recent_score_events
             ],
-            active_issues=[active_issue_response(issue) for issue in record.active_issues or []],
+            active_issues=[active_issue_response(issue) for issue in active_issues],
+            insight=self._area_insight(
+                record,
+                recent_score_events=recent_score_events,
+                active_issues=active_issues,
+            ),
         )
 
     def recalculate_issue_area(
@@ -168,7 +190,11 @@ class AreaService:
         current_time = now_utc()
         self._apply_score_snapshot(
             area,
-            compute_area_score_snapshot(area.issues, current_time=current_time),
+            compute_area_score_snapshot(
+                area.issues,
+                completed_missions=completed_missions(area.missions),
+                current_time=current_time,
+            ),
             event_type=event_type,
             related_issue_id=related_issue_id,
             related_mission_id=related_mission_id,
@@ -188,12 +214,24 @@ class AreaService:
             ),
         )
 
+    def apply_completed_mission_reward(self, mission: Mission) -> AreaSummary:
+        return self.recalculate_area_scores(
+            mission.area_id,
+            event_type="mission_completed",
+            related_mission_id=mission.id,
+            reason=MISSION_REWARD_REASON,
+        )
+
     def recalculate_all_scores(self) -> int:
         areas = self.repository.list_for_score_recalculation()
         for area in areas:
             self._apply_score_snapshot(
                 area,
-                compute_area_score_snapshot(area.issues, current_time=now_utc()),
+                compute_area_score_snapshot(
+                    area.issues,
+                    completed_missions=completed_missions(area.missions),
+                    current_time=now_utc(),
+                ),
             )
         self.recalculate_ranks(areas)
         self.repository.flush()
@@ -240,12 +278,35 @@ class AreaService:
         area.status_label = status_label(snapshot.scores[AreaScoreKey.OVERALL]).value
         area.updated_at = now_utc()
 
+    def _area_insight(
+        self,
+        record: AreaRecord,
+        *,
+        recent_score_events: list[AreaScoreEvent],
+        active_issues: list[Issue],
+    ) -> AreaInsightResponse:
+        explainer = self.explainer
+        if explainer is None:
+            explainer = DemoCivicAreaExplainer()
+        return explainer.explain(
+            AreaInsightInput(
+                area=record.area,
+                open_issues=record.open_issues,
+                resolved_this_week=record.resolved_this_week,
+                active_missions=record.active_missions,
+                total_issues=record.total_issues,
+                recent_score_events=recent_score_events,
+                active_issues=active_issues,
+            ),
+        )
+
 
 def open_issue_count(issues: list[Issue]) -> int:
     return sum(
         1
         for issue in issues
-        if issue.status not in (IssueStatus.RESOLVED, IssueStatus.REJECTED)
+        if issue.status
+        not in (IssueStatus.RESOLVED, IssueStatus.REJECTED, IssueStatus.DUPLICATE)
     )
 
 
@@ -255,3 +316,11 @@ def resolved_issue_count(issues: list[Issue], *, resolved_since: datetime) -> in
         for issue in issues
         if issue.status is IssueStatus.RESOLVED and issue.updated_at >= resolved_since
     )
+
+
+def completed_missions(missions: list[Mission]) -> list[Mission]:
+    return [
+        mission
+        for mission in missions
+        if mission.status is MissionStatus.COMPLETED and mission.completed_at is not None
+    ]

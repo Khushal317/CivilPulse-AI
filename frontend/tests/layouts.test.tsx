@@ -61,6 +61,14 @@ vi.stubGlobal(
           resolved_this_week: 0,
           active_missions: 0,
           total_issues: 0,
+          insight: {
+            explanation:
+              "Sector 12 is stable, with public Civic Genome signals ready for community review.",
+            next_best_actions: [
+              "Review active public issues and verify only what can be safely observed.",
+            ],
+            model_used: "test-layout-explainer",
+          },
           recent_score_events: [],
           active_issues: [],
           created_at: "2026-06-27T10:00:00Z",
@@ -149,6 +157,7 @@ describe("application route shells", () => {
     ],
     ["/admin", "Administrator dashboard", "Admin navigation"],
     ["/admin/issues", "Manage reported issues", "Admin navigation"],
+    ["/admin/missions", "Civic Mission Console", "Admin navigation"],
   ])("renders %s in the intended shell", async (path, heading, navigation) => {
     const router = createMemoryRouter(appRoutes, { initialEntries: [path] });
     render(

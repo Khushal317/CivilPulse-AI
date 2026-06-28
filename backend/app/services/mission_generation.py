@@ -12,6 +12,7 @@ from pydantic import ValidationError
 from app.core.config import Settings, get_settings
 from app.core.errors import AppError
 from app.domain.enums import IssueCategory
+from app.domain.mission_titles import mission_duplicate_key
 from app.domain.missions import MissionStatus, MissionType
 from app.models.mission import Mission
 from app.repositories.missions import MissionContext, MissionRepository
@@ -287,6 +288,16 @@ class MissionGenerationService:
     generator: CivicMissionGenerator
 
     def generate_drafts(self) -> MissionGenerationResponse:
+        existing_missions = self.repository.list_admin()
+        existing_keys = {
+            mission_duplicate_key(
+                title=mission.title,
+                area_id=mission.area_id,
+                category=mission.category,
+            )
+            for mission in existing_missions
+            if mission.status in (MissionStatus.DRAFT, MissionStatus.ACTIVE)
+        }
         context = self.repository.generation_context()
         if not context.areas:
             return empty_mission_generation_response(self.generator.model_name)
@@ -298,6 +309,14 @@ class MissionGenerationService:
         now = datetime.now(UTC)
         created: list[Mission] = []
         for candidate in payload.missions:
+            key = mission_duplicate_key(
+                title=candidate.title,
+                area_id=candidate.area_id,
+                category=candidate.category,
+            )
+            if key in existing_keys:
+                continue
+            existing_keys.add(key)
             mission = Mission(
                 title=candidate.title,
                 area_id=candidate.area_id,

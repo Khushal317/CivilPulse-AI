@@ -13,6 +13,10 @@ from app.models.issue_update import IssueUpdate
 from app.schemas.admin import AdminIssueListQuery
 
 
+def active_admin_issue_filter() -> ColumnElement[bool]:
+    return Issue.status != IssueStatus.DUPLICATE
+
+
 @dataclass(frozen=True, slots=True)
 class AdminIssueRecord:
     issue: Issue
@@ -89,7 +93,7 @@ class SQLAlchemyAdminIssueRepository:
                     ),
                 ),
                 func.count(case((Issue.status == IssueStatus.RESOLVED, 1))),
-            ),
+            ).where(active_admin_issue_filter()),
         ).one()
         return {
             "total_reports": row[0],
@@ -104,6 +108,7 @@ class SQLAlchemyAdminIssueRepository:
             category: count
             for category, count in self._session.execute(
                 select(Issue.category, func.count(Issue.id))
+                .where(active_admin_issue_filter())
                 .group_by(Issue.category)
                 .order_by(Issue.category),
             ).all()
@@ -114,6 +119,7 @@ class SQLAlchemyAdminIssueRepository:
         statement = (
             select(Issue, verification_count)
             .outerjoin(CommunityAction, CommunityAction.issue_id == Issue.id)
+            .where(active_admin_issue_filter())
             .group_by(Issue.id)
             .order_by(Issue.created_at.desc(), Issue.id.desc())
             .limit(limit)
@@ -132,6 +138,7 @@ class SQLAlchemyAdminIssueRepository:
             .outerjoin(CommunityAction, CommunityAction.issue_id == Issue.id)
             .where(
                 Issue.severity.in_(("high", "critical")),
+                active_admin_issue_filter(),
                 Issue.status.not_in((IssueStatus.RESOLVED, IssueStatus.REJECTED)),
             )
             .group_by(Issue.id)
@@ -147,6 +154,7 @@ class SQLAlchemyAdminIssueRepository:
 
     def list_admin(self, query: AdminIssueListQuery) -> tuple[list[AdminIssueRecord], int]:
         filters = []
+        filters.append(active_admin_issue_filter())
         if query.search:
             term = query.search.strip()
             filters.append(
@@ -179,7 +187,7 @@ class SQLAlchemyAdminIssueRepository:
     def get_detail(self, issue_id: UUID) -> Issue | None:
         return self._session.scalar(
             select(Issue)
-            .where(Issue.id == issue_id)
+            .where(Issue.id == issue_id, active_admin_issue_filter())
             .options(selectinload(Issue.updates)),
         )
 

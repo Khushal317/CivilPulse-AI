@@ -52,8 +52,15 @@ export interface AreaActiveIssue {
   updated_at: string;
 }
 
+export interface AreaInsight {
+  explanation: string;
+  next_best_actions: string[];
+  model_used: string;
+}
+
 export interface AreaDetail extends AreaSummary {
   total_issues: number;
   recent_score_events: AreaScoreEvent[];
   active_issues: AreaActiveIssue[];
+  insight: AreaInsight;
 }

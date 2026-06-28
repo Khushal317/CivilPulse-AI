@@ -101,3 +101,22 @@ class AdminStatusUpdateRequest(APIModel):
         if self.to_status is not IssueStatus.REJECTED and self.rejection_reason is not None:
             raise ValueError("rejection_reason is only valid when rejecting an issue")
         return self
+
+
+class DuplicateIssueResolutionRequest(APIModel):
+    canonical_issue_id: UUID
+    duplicate_issue_ids: list[UUID] = Field(min_length=1, max_length=20)
+    reason: str | None = Field(default=None, max_length=2_000)
+
+    @model_validator(mode="after")
+    def prevent_self_duplicate(self) -> "DuplicateIssueResolutionRequest":
+        if self.canonical_issue_id in self.duplicate_issue_ids:
+            raise ValueError("canonical_issue_id cannot also be marked as duplicate")
+        if len(set(self.duplicate_issue_ids)) != len(self.duplicate_issue_ids):
+            raise ValueError("duplicate_issue_ids cannot contain repeated issue IDs")
+        return self
+
+
+class DuplicateIssueResolutionResponse(APIModel):
+    canonical_issue: AdminIssueSummary
+    duplicates_marked: list[AdminIssueSummary]

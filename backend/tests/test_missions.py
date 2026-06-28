@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.db.base import Base
-from app.domain.areas import area_slug
+from app.domain.areas import AreaScoreKey, area_slug
 from app.domain.enums import (
     CommunityActionType,
     IssueCategory,
@@ -24,7 +24,7 @@ from app.models.issue import Issue
 from app.models.mission import Mission
 from app.models.mission_action import MissionAction
 from app.repositories.missions import SQLAlchemyMissionRepository
-from app.schemas.missions import MissionAreaSummary, MissionSummary
+from app.schemas.missions import ManualMissionCreate, MissionAreaSummary, MissionSummary
 from app.services.missions import MissionService
 
 
@@ -115,6 +115,15 @@ def make_issue(number: int, area: Area) -> Issue:
     )
 
 
+class FakeMissionRewardTrigger:
+    def __init__(self) -> None:
+        self.completed_missions: list[UUID] = []
+
+    def apply_completed_mission_reward(self, mission: Mission) -> object:
+        self.completed_missions.append(mission.id)
+        return None
+
+
 def test_mission_schema_validates_lifecycle_fields() -> None:
     area = MissionAreaSummary(
         id=UUID(int=1),
@@ -200,7 +209,8 @@ def test_admin_can_publish_expire_and_complete_missions(mission_session: Session
         repository.add(mission)
     mission_session.commit()
 
-    service = MissionService(repository)
+    trigger = FakeMissionRewardTrigger()
+    service = MissionService(repository, reward_trigger=trigger)
     published = service.publish(draft.id)
     expired = service.expire(active_to_expire.id)
     completed = service.complete(active_to_complete.id)
@@ -212,6 +222,117 @@ def test_admin_can_publish_expire_and_complete_missions(mission_session: Session
     assert completed.status is MissionStatus.COMPLETED
     assert completed.progress_count == completed.target_count
     assert completed.completed_at is not None
+    assert trigger.completed_missions == [active_to_complete.id]
+
+
+def test_admin_can_delete_draft_and_expired_missions(mission_session: Session) -> None:
+    area = make_area()
+    draft = make_mission(10, area, status=MissionStatus.DRAFT, progress_count=0)
+    expired = make_mission(11, area, status=MissionStatus.EXPIRED, progress_count=2)
+    active = make_mission(12, area, status=MissionStatus.ACTIVE, progress_count=1)
+    mission_session.add(area)
+    repository = SQLAlchemyMissionRepository(mission_session)
+    for mission in (draft, expired, active):
+        repository.add(mission)
+    mission_session.commit()
+    service = MissionService(repository)
+
+    service.delete(draft.id)
+    service.delete(expired.id)
+    with pytest.raises(AppError) as active_delete:
+        service.delete(active.id)
+
+    assert repository.get_detail(draft.id) is None
+    assert repository.get_detail(expired.id) is None
+    assert repository.get_detail(active.id) is not None
+    assert active_delete.value.code == "mission_not_deletable"
+
+
+def test_admin_mission_list_auto_removes_duplicate_drafts(
+    mission_session: Session,
+) -> None:
+    area = make_area()
+    older_duplicate = make_mission(10, area, status=MissionStatus.DRAFT, progress_count=0)
+    older_duplicate.title = "Document Road Damage near DMART, Sector 3 Malviya Nagar"
+    newer_duplicate = make_mission(11, area, status=MissionStatus.DRAFT, progress_count=0)
+    newer_duplicate.title = "Verify Road Damage near DMART, Sector 3 Malviya Nagar"
+    unique = make_mission(12, area, status=MissionStatus.DRAFT, progress_count=0)
+    unique.title = "Verify broken streetlights near Central Park"
+    mission_session.add(area)
+    repository = SQLAlchemyMissionRepository(mission_session)
+    for mission in (older_duplicate, newer_duplicate, unique):
+        repository.add(mission)
+    mission_session.commit()
+
+    grouped = MissionService(repository).list_admin()
+
+    assert [mission.id for mission in grouped.drafts] == [newer_duplicate.id, unique.id]
+    assert repository.get_detail(older_duplicate.id) is None
+
+
+def test_admin_can_create_manual_mission_and_publish_immediately(
+    mission_session: Session,
+) -> None:
+    area = make_area()
+    mission_session.add(area)
+    mission_session.commit()
+    service = MissionService(SQLAlchemyMissionRepository(mission_session))
+
+    mission = service.create_manual(
+        ManualMissionCreate(
+            title="Verify Road Damage near DMART, Sector 3 Malviya Nagar",
+            area_id=area.id,
+            mission_type=MissionType.VERIFICATION,
+            goal_description=(
+                "Ask nearby residents to safely confirm whether the road damage is visible."
+            ),
+            target_count=3,
+            category=IssueCategory.ROAD_DAMAGE,
+            reward_points=15,
+            reward_score_key=AreaScoreKey.PARTICIPATION,
+            ai_reason=(
+                "Manual administrator mission for a visible road damage hotspot that needs "
+                "safe public confirmation."
+            ),
+            expires_in_days=5,
+            publish=True,
+        ),
+    )
+
+    assert mission.status is MissionStatus.ACTIVE
+    assert mission.published_at is not None
+    assert mission.reward == {"points": 15, "score_key": "participation"}
+    assert mission.area.id == area.id
+
+
+def test_admin_manual_mission_rejects_duplicate_draft_or_active(
+    mission_session: Session,
+) -> None:
+    area = make_area()
+    existing = make_mission(10, area, status=MissionStatus.DRAFT, progress_count=0)
+    existing.title = "Document Road Damage near DMART, Sector 3 Malviya Nagar"
+    mission_session.add_all([area, existing])
+    mission_session.commit()
+    service = MissionService(SQLAlchemyMissionRepository(mission_session))
+
+    with pytest.raises(AppError) as duplicate:
+        service.create_manual(
+            ManualMissionCreate(
+                title="Verify Road Damage near DMART, Sector 3 Malviya Nagar",
+                area_id=area.id,
+                mission_type=MissionType.VERIFICATION,
+                goal_description=(
+                    "Ask nearby residents to safely confirm whether the road damage is visible."
+                ),
+                target_count=3,
+                category=IssueCategory.ROAD_DAMAGE,
+                reward_points=15,
+                reward_score_key=AreaScoreKey.PARTICIPATION,
+                ai_reason="This manual mission duplicates an existing draft mission.",
+            ),
+        )
+
+    assert duplicate.value.code == "mission_duplicate"
 
 
 def test_admin_mission_lifecycle_rejects_invalid_transitions(
@@ -293,6 +414,27 @@ def test_mission_join_and_volunteer_increment_progress_once(
         MissionActionType.JOINED,
         MissionActionType.VOLUNTEERED,
     }
+
+
+def test_mission_action_completion_applies_reward_once(
+    mission_session: Session,
+) -> None:
+    area = make_area()
+    mission = make_mission(10, area, progress_count=4)
+    mission_session.add_all([area, mission])
+    mission_session.commit()
+    trigger = FakeMissionRewardTrigger()
+    service = MissionService(SQLAlchemyMissionRepository(mission_session), reward_trigger=trigger)
+
+    completed = service.submit_action(mission.id, MissionActionType.JOINED, "actor-one")
+
+    assert completed.mission_status is MissionStatus.COMPLETED
+    assert completed.progress_count == completed.target_count
+    assert trigger.completed_missions == [mission.id]
+    with pytest.raises(AppError) as repeated_after_completion:
+        service.submit_action(mission.id, MissionActionType.VOLUNTEERED, "actor-two")
+    assert repeated_after_completion.value.code == "mission_completed"
+    assert trigger.completed_missions == [mission.id]
 
 
 def test_mission_linked_issue_actions_create_community_signals(

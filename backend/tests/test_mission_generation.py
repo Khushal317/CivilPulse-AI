@@ -263,6 +263,38 @@ def test_mission_generation_service_saves_generated_missions_as_drafts() -> None
     assert repository.saved[0].model_used == "gemini-mission-test"
 
 
+def test_mission_generation_service_skips_duplicate_drafts() -> None:
+    repository = FakeMissionRepository(mission_context())
+    existing = Mission(
+        id=UUID(int=20),
+        title="Document Sector 12 streetlights",
+        area=repository.area,
+        area_id=repository.area.id,
+        mission_type=MissionType.VERIFICATION,
+        status=MissionStatus.DRAFT,
+        goal_description="Ask residents to safely confirm the streetlight issue.",
+        target_count=5,
+        progress_count=0,
+        category=IssueCategory.STREETLIGHT,
+        reward_json={"points": 20, "score_key": "participation"},
+        ai_reason="Existing draft mission.",
+        linked_issue_ids_json=[str(ISSUE_ID)],
+        model_used="existing",
+        raw_response_json={},
+        expires_at=datetime.now(UTC),
+        published_at=None,
+        completed_at=None,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    repository.saved.append(existing)
+
+    response = MissionGenerationService(repository, StaticMissionGenerator()).generate_drafts()
+
+    assert response.created_drafts == []
+    assert repository.saved == [existing]
+
+
 def test_mission_generation_service_rejects_unknown_ids_before_saving() -> None:
     repository = FakeMissionRepository(mission_context())
 

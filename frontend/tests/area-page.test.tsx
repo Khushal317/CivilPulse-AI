@@ -35,6 +35,15 @@ const area = {
 const areaDetail = {
   ...area,
   total_issues: 5,
+  insight: {
+    explanation:
+      "Sector 12 is improving because residents are verifying issues and admins are resolving public reports.",
+    next_best_actions: [
+      "Verify safe public issues near you.",
+      "Join active community missions when available.",
+    ],
+    model_used: "demo-civic-area-explainer-v1",
+  },
   recent_score_events: [
     {
       id: "22222222-2222-4222-8222-222222222222",
@@ -137,10 +146,13 @@ describe("Neighborhood Arena", () => {
     expect(screen.getByText(/infrastructure -2/)).toBeInTheDocument();
     expect(screen.getByText("70 → 68")).toBeInTheDocument();
     expect(screen.getByText("5 total reports")).toBeInTheDocument();
+    expect(screen.getByText("What this Civic Genome means")).toBeInTheDocument();
+    expect(screen.getByText(/residents are verifying issues/)).toBeInTheDocument();
+    expect(screen.getByText("Verify safe public issues near you.")).toBeInTheDocument();
     expect(screen.getByText("Issues currently shaping this Civic Genome")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Damaged road near school gate" }))
       .toHaveAttribute("href", "/issues/33333333-3333-4333-8333-333333333333");
-    expect(screen.getByText("Missions will appear here after the mission engine is introduced."))
+    expect(screen.getByText(/No active missions are connected to this area right now/))
       .toBeInTheDocument();
   });
 

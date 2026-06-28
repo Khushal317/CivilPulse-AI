@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { useNotifications } from "../../app/notificationContext";
@@ -7,14 +8,20 @@ import { Spinner } from "../../components/feedback/Loading";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { SelectField, TextAreaField, TextField } from "../../components/ui/FormField";
+import { getAreas } from "../areas/api";
 import type { MissionDetail, MissionStatus } from "../missions/types";
 import {
   completeMission,
+  createManualMission,
+  deleteMission,
   expireMission,
   generateMissionDrafts,
   getAdminMissions,
   publishMission,
+  refineManualMission,
 } from "./api";
+import type { ManualMissionCreate, ManualMissionDraft } from "./types";
 import { useAdminSession } from "./useAdminSession";
 
 const statusTone: Record<MissionStatus, "neutral" | "info" | "success" | "warning"> = {
@@ -36,15 +43,65 @@ function formatStatus(value: MissionStatus) {
   return value.replaceAll("_", " ");
 }
 
-function missionActionMessage(action: "publish" | "expire" | "complete") {
+const missionTypes = [
+  "verification",
+  "fix_confirmation",
+  "hotspot",
+  "category",
+  "volunteer",
+] as const;
+
+const missionCategories = [
+  "road_damage",
+  "garbage_waste",
+  "streetlight",
+  "water_leakage",
+  "drainage_sewage",
+  "public_safety",
+  "other",
+] as const;
+
+const rewardScoreKeys = [
+  "infrastructure",
+  "cleanliness",
+  "safety",
+  "participation",
+  "responsiveness",
+  "environment",
+] as const;
+
+const emptyManualDraft: ManualMissionDraft = {
+  title: "",
+  area_id: "",
+  mission_type: "verification",
+  goal_description: "",
+  target_count: 5,
+  category: "road_damage",
+  reward_points: 20,
+  reward_score_key: "participation",
+  ai_reason: "",
+  linked_issue_ids: [],
+  expires_in_days: 7,
+};
+
+function parseLinkedIssueIds(value: string): string[] {
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function missionActionMessage(action: "publish" | "expire" | "complete" | "delete") {
   if (action === "publish") return "Mission published";
   if (action === "expire") return "Mission expired";
+  if (action === "delete") return "Mission deleted";
   return "Mission completed";
 }
 
 interface MissionCardProps {
   mission: MissionDetail;
   onComplete: (missionId: string) => void;
+  onDelete: (missionId: string) => void;
   onExpire: (missionId: string) => void;
   onPublish: (missionId: string) => void;
   pendingMissionId: string | null;
@@ -53,6 +110,7 @@ interface MissionCardProps {
 function MissionCard({
   mission,
   onComplete,
+  onDelete,
   onExpire,
   onPublish,
   pendingMissionId,
@@ -89,14 +147,24 @@ function MissionCard({
         </p>
       )}
       {mission.status === "draft" && (
-        <Button
-          isLoading={isPending}
-          onClick={() => onPublish(mission.id)}
-          size="small"
-          variant="primary"
-        >
-          Publish mission
-        </Button>
+        <div className="admin-actions">
+          <Button
+            isLoading={isPending}
+            onClick={() => onPublish(mission.id)}
+            size="small"
+            variant="primary"
+          >
+            Publish mission
+          </Button>
+          <Button
+            disabled={isPending}
+            onClick={() => onDelete(mission.id)}
+            size="small"
+            variant="danger"
+          >
+            Delete draft
+          </Button>
+        </div>
       )}
       {mission.status === "active" && (
         <div className="admin-actions">
@@ -118,6 +186,16 @@ function MissionCard({
           </Button>
         </div>
       )}
+      {mission.status === "expired" && (
+        <Button
+          isLoading={isPending}
+          onClick={() => onDelete(mission.id)}
+          size="small"
+          variant="danger"
+        >
+          Delete expired mission
+        </Button>
+      )}
     </article>
   );
 }
@@ -126,6 +204,7 @@ interface MissionSectionProps {
   emptyMessage: string;
   missions: MissionDetail[];
   onComplete: (missionId: string) => void;
+  onDelete: (missionId: string) => void;
   onExpire: (missionId: string) => void;
   onPublish: (missionId: string) => void;
   pendingMissionId: string | null;
@@ -136,6 +215,7 @@ function MissionSection({
   emptyMessage,
   missions,
   onComplete,
+  onDelete,
   onExpire,
   onPublish,
   pendingMissionId,
@@ -152,6 +232,7 @@ function MissionSection({
               key={mission.id}
               mission={mission}
               onComplete={onComplete}
+              onDelete={onDelete}
               onExpire={onExpire}
               onPublish={onPublish}
               pendingMissionId={pendingMissionId}
@@ -169,9 +250,15 @@ export function MissionGeneratorPanel() {
   const session = useAdminSession();
   const queryClient = useQueryClient();
   const { notify } = useNotifications();
+  const [manualDraft, setManualDraft] = useState<ManualMissionDraft>(emptyManualDraft);
+  const [linkedIssueIdsText, setLinkedIssueIdsText] = useState("");
   const missions = useQuery({
     queryKey: ["admin-missions"],
     queryFn: ({ signal }) => getAdminMissions(signal),
+  });
+  const areas = useQuery({
+    queryKey: ["areas"],
+    queryFn: ({ signal }) => getAreas(signal),
   });
   const generate = useMutation({
     mutationFn: () => generateMissionDrafts(session.data?.csrf_token ?? ""),
@@ -187,17 +274,58 @@ export function MissionGeneratorPanel() {
       });
     },
   });
+  const refineManual = useMutation({
+    mutationFn: () =>
+      refineManualMission(
+        {
+          ...manualDraft,
+          linked_issue_ids: parseLinkedIssueIds(linkedIssueIdsText),
+        },
+        session.data?.csrf_token ?? "",
+      ),
+    onSuccess: (result) => {
+      setManualDraft(result);
+      setLinkedIssueIdsText(result.linked_issue_ids.join(", "));
+      notify({
+        title: "Mission refined with AI",
+        message: "Review the improved draft, then save or publish when ready.",
+        tone: "success",
+      });
+    },
+  });
+  const createManual = useMutation({
+    mutationFn: (publish: boolean) => {
+      const payload: ManualMissionCreate = {
+        ...manualDraft,
+        publish,
+        linked_issue_ids: parseLinkedIssueIds(linkedIssueIdsText),
+      };
+      return createManualMission(payload, session.data?.csrf_token ?? "");
+    },
+    onSuccess: (mission) => {
+      void queryClient.invalidateQueries({ queryKey: ["admin-missions"] });
+      void queryClient.invalidateQueries({ queryKey: ["missions"] });
+      setManualDraft(emptyManualDraft);
+      setLinkedIssueIdsText("");
+      notify({
+        title: mission.status === "active" ? "Manual mission published" : "Draft saved",
+        message: "The admin mission console has been refreshed.",
+        tone: "success",
+      });
+    },
+  });
   const missionAction = useMutation({
     mutationFn: async ({
       action,
       missionId,
     }: {
-      action: "publish" | "expire" | "complete";
+      action: "publish" | "expire" | "complete" | "delete";
       missionId: string;
     }) => {
       const csrf = session.data?.csrf_token ?? "";
       if (action === "publish") return publishMission(missionId, csrf);
       if (action === "expire") return expireMission(missionId, csrf);
+      if (action === "delete") return deleteMission(missionId, csrf);
       return completeMission(missionId, csrf);
     },
     onSuccess: (_mission, variables) => {
@@ -213,6 +341,18 @@ export function MissionGeneratorPanel() {
   const pendingMissionId = missionAction.isPending
     ? missionAction.variables.missionId
     : null;
+  const canSubmitManual =
+    Boolean(session.data?.csrf_token) &&
+    Boolean(manualDraft.area_id) &&
+    manualDraft.title.trim().length >= 8 &&
+    manualDraft.goal_description.trim().length >= 20 &&
+    manualDraft.ai_reason.trim().length >= 20;
+  const setManualField = <Key extends keyof ManualMissionDraft>(
+    key: Key,
+    value: ManualMissionDraft[Key],
+  ) => {
+    setManualDraft((current) => ({ ...current, [key]: value }));
+  };
 
   return (
     <Card as="section" className="operations-agent-panel" padding="large">
@@ -255,6 +395,161 @@ export function MissionGeneratorPanel() {
         />
       )}
 
+      {refineManual.isError && (
+        <ErrorState
+          description={refineManual.error.message}
+          title="Mission refinement failed"
+        />
+      )}
+
+      {createManual.isError && (
+        <ErrorState
+          description={createManual.error.message}
+          title="Manual mission could not be saved"
+        />
+      )}
+
+      <Card as="section" className="operations-section" padding="large">
+        <p className="eyebrow">Manual mission builder</p>
+        <h3>Create a community mission manually</h3>
+        <p className="admin-muted">
+          Write the mission yourself, optionally refine the wording with AI, then save it
+          as an admin-review draft or publish it immediately.
+        </p>
+        <div className="operations-manual-form">
+          <TextField
+            label="Mission heading"
+            onChange={(event) => setManualField("title", event.target.value)}
+            placeholder="Verify road damage near DMART"
+            value={manualDraft.title}
+          />
+          <SelectField
+            label="Neighborhood area"
+            onChange={(event) => setManualField("area_id", event.target.value)}
+            value={manualDraft.area_id}
+          >
+            <option value="">Select an area</option>
+            {areas.data?.items?.map((area) => (
+              <option key={area.id} value={area.id}>
+                {area.name} · {area.city}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label="Mission type"
+            onChange={(event) =>
+              setManualField("mission_type", event.target.value as ManualMissionDraft["mission_type"])
+            }
+            value={manualDraft.mission_type}
+          >
+            {missionTypes.map((type) => (
+              <option key={type} value={type}>
+                {formatMissionType(type)}
+              </option>
+            ))}
+          </SelectField>
+          <SelectField
+            label="Category"
+            onChange={(event) =>
+              setManualField("category", event.target.value || null)
+            }
+            value={manualDraft.category ?? ""}
+          >
+            <option value="">All categories</option>
+            {missionCategories.map((category) => (
+              <option key={category} value={category}>
+                {formatCategory(category)}
+              </option>
+            ))}
+          </SelectField>
+          <TextField
+            label="Target count"
+            min={1}
+            max={500}
+            onChange={(event) =>
+              setManualField("target_count", Number(event.target.value))
+            }
+            type="number"
+            value={manualDraft.target_count}
+          />
+          <TextField
+            label="Expires in days"
+            min={1}
+            max={30}
+            onChange={(event) =>
+              setManualField("expires_in_days", Number(event.target.value))
+            }
+            type="number"
+            value={manualDraft.expires_in_days}
+          />
+          <TextField
+            label="Reward points"
+            min={0}
+            max={100}
+            onChange={(event) =>
+              setManualField("reward_points", Number(event.target.value))
+            }
+            type="number"
+            value={manualDraft.reward_points}
+          />
+          <SelectField
+            label="Reward score"
+            onChange={(event) => setManualField("reward_score_key", event.target.value)}
+            value={manualDraft.reward_score_key}
+          >
+            {rewardScoreKeys.map((scoreKey) => (
+              <option key={scoreKey} value={scoreKey}>
+                {formatMissionType(scoreKey)}
+              </option>
+            ))}
+          </SelectField>
+          <TextAreaField
+            label="Goal description"
+            onChange={(event) => setManualField("goal_description", event.target.value)}
+            placeholder="Ask nearby residents to safely confirm whether this issue is visible from public space."
+            value={manualDraft.goal_description}
+          />
+          <TextAreaField
+            label="Admin reason"
+            onChange={(event) => setManualField("ai_reason", event.target.value)}
+            placeholder="Explain why this mission matters right now."
+            value={manualDraft.ai_reason}
+          />
+          <TextAreaField
+            hint="Optional comma-separated UUIDs for issues this mission should reference."
+            label="Linked issue IDs"
+            onChange={(event) => setLinkedIssueIdsText(event.target.value)}
+            optional
+            value={linkedIssueIdsText}
+          />
+        </div>
+        <div className="admin-actions">
+          <Button
+            disabled={!canSubmitManual}
+            isLoading={refineManual.isPending}
+            onClick={() => refineManual.mutate()}
+            variant="secondary"
+          >
+            Refine with AI
+          </Button>
+          <Button
+            disabled={!canSubmitManual}
+            isLoading={createManual.isPending && createManual.variables === false}
+            onClick={() => createManual.mutate(false)}
+            variant="secondary"
+          >
+            Save draft
+          </Button>
+          <Button
+            disabled={!canSubmitManual}
+            isLoading={createManual.isPending && createManual.variables === true}
+            onClick={() => createManual.mutate(true)}
+          >
+            Publish manually
+          </Button>
+        </div>
+      </Card>
+
       {missions.isPending && (
         <div className="operations-inline-state">
           <Spinner label="Loading mission console…" />
@@ -275,6 +570,7 @@ export function MissionGeneratorPanel() {
             emptyMessage="No draft missions are waiting for review."
             missions={missions.data.drafts}
             onComplete={(missionId) => missionAction.mutate({ action: "complete", missionId })}
+            onDelete={(missionId) => missionAction.mutate({ action: "delete", missionId })}
             onExpire={(missionId) => missionAction.mutate({ action: "expire", missionId })}
             onPublish={(missionId) => missionAction.mutate({ action: "publish", missionId })}
             pendingMissionId={pendingMissionId}
@@ -284,6 +580,7 @@ export function MissionGeneratorPanel() {
             emptyMessage="No active missions are currently public."
             missions={missions.data.active}
             onComplete={(missionId) => missionAction.mutate({ action: "complete", missionId })}
+            onDelete={(missionId) => missionAction.mutate({ action: "delete", missionId })}
             onExpire={(missionId) => missionAction.mutate({ action: "expire", missionId })}
             onPublish={(missionId) => missionAction.mutate({ action: "publish", missionId })}
             pendingMissionId={pendingMissionId}
@@ -293,6 +590,7 @@ export function MissionGeneratorPanel() {
             emptyMessage="No missions have been completed yet."
             missions={missions.data.completed}
             onComplete={(missionId) => missionAction.mutate({ action: "complete", missionId })}
+            onDelete={(missionId) => missionAction.mutate({ action: "delete", missionId })}
             onExpire={(missionId) => missionAction.mutate({ action: "expire", missionId })}
             onPublish={(missionId) => missionAction.mutate({ action: "publish", missionId })}
             pendingMissionId={pendingMissionId}
@@ -302,6 +600,7 @@ export function MissionGeneratorPanel() {
             emptyMessage="No missions have expired yet."
             missions={missions.data.expired}
             onComplete={(missionId) => missionAction.mutate({ action: "complete", missionId })}
+            onDelete={(missionId) => missionAction.mutate({ action: "delete", missionId })}
             onExpire={(missionId) => missionAction.mutate({ action: "expire", missionId })}
             onPublish={(missionId) => missionAction.mutate({ action: "publish", missionId })}
             pendingMissionId={pendingMissionId}

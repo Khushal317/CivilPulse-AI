@@ -26,6 +26,7 @@ const statusLabels: Record<IssueStatus, string> = {
   in_progress: "In progress",
   resolved: "Resolved",
   rejected: "Rejected",
+  duplicate: "Duplicate",
 };
 
 const actionContent: Record<
@@ -139,7 +140,8 @@ export function IssueDetailPage() {
   }
 
   const issue = issueQuery.data;
-  const actionsUnavailable = issue.status === "rejected";
+  const isDuplicate = issue.status === "duplicate";
+  const actionsUnavailable = issue.status === "rejected" || isDuplicate;
   const timelineItems = issue.updates.map((update, index) => ({
     id: update.id,
     title: statusLabels[update.to_status],
@@ -177,6 +179,23 @@ export function IssueDetailPage() {
 
         <div className="issue-detail-grid">
           <main className="issue-detail-main">
+            {isDuplicate && issue.duplicate_of ? (
+              <Card className="duplicate-redirect-card" padding="large">
+                <p className="eyebrow">Duplicate report</p>
+                <h2>This report was merged into the original issue</h2>
+                <p className="detail-copy">
+                  An administrator marked this report as a duplicate so updates stay focused in
+                  one place. This page remains visible temporarily for transparency.
+                </p>
+                <Link
+                  className={buttonClassName("primary")}
+                  to={`/issues/${issue.duplicate_of.id}`}
+                >
+                  Open original issue: {issue.duplicate_of.public_reference}
+                </Link>
+              </Card>
+            ) : null}
+
             <Card className="issue-hero-image" padding="none">
               <img
                 alt={`Reported civic issue: ${issue.title}`}
@@ -264,7 +283,9 @@ export function IssueDetailPage() {
               </div>
               {actionsUnavailable && (
                 <p className="community-unavailable" role="status">
-                  Community signals are unavailable because this issue was rejected.
+                  {isDuplicate
+                    ? "Community signals are unavailable because this report is a duplicate. Please follow the original issue instead."
+                    : "Community signals are unavailable because this issue was rejected."}
                 </p>
               )}
               {action.isError && (

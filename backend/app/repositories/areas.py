@@ -101,6 +101,7 @@ class SQLAlchemyAreaRepository:
             .where(Area.id == area_id)
             .options(
                 selectinload(Area.issues).selectinload(Issue.community_actions),
+                selectinload(Area.missions),
             )
             .with_for_update(),
         )
@@ -111,6 +112,7 @@ class SQLAlchemyAreaRepository:
                 select(Area)
                 .options(
                     selectinload(Area.issues).selectinload(Issue.community_actions),
+                    selectinload(Area.missions),
                 )
                 .order_by(Area.name, Area.id)
                 .with_for_update(),
@@ -133,7 +135,13 @@ class SQLAlchemyAreaRepository:
                 select(Issue)
                 .where(
                     Issue.area_id == area_id,
-                    Issue.status.not_in((IssueStatus.RESOLVED, IssueStatus.REJECTED)),
+                    Issue.status.not_in(
+                        (
+                            IssueStatus.RESOLVED,
+                            IssueStatus.REJECTED,
+                            IssueStatus.DUPLICATE,
+                        ),
+                    ),
                 )
                 .order_by(Issue.updated_at.desc(), Issue.id.desc())
                 .limit(limit),
@@ -155,7 +163,13 @@ class SQLAlchemyAreaRepository:
             func.count(
                 case(
                     (
-                        Issue.status.not_in((IssueStatus.RESOLVED, IssueStatus.REJECTED)),
+                        Issue.status.not_in(
+                            (
+                                IssueStatus.RESOLVED,
+                                IssueStatus.REJECTED,
+                                IssueStatus.DUPLICATE,
+                            ),
+                        ),
                         1,
                     ),
                 ),

@@ -17,6 +17,8 @@ from app.schemas.admin import (
     AdminIssueSummary,
     AdminStatusUpdateRequest,
     CategoryMetric,
+    DuplicateIssueResolutionRequest,
+    DuplicateIssueResolutionResponse,
 )
 from app.schemas.issues import CommunityCounts, IssueUpdatePublic
 from app.services.areas import AreaScoreTrigger
@@ -47,6 +49,7 @@ VALID_TRANSITIONS: dict[IssueStatus, frozenset[IssueStatus]] = {
     ),
     IssueStatus.RESOLVED: frozenset({IssueStatus.IN_PROGRESS}),
     IssueStatus.REJECTED: frozenset({IssueStatus.REPORTED}),
+    IssueStatus.DUPLICATE: frozenset(),
 }
 
 
@@ -161,6 +164,84 @@ class AdminService:
         self._recalculate_issue_area(issue, request.to_status)
         return self._detail(issue)
 
+    def mark_duplicates(
+        self,
+        request: DuplicateIssueResolutionRequest,
+    ) -> DuplicateIssueResolutionResponse:
+        canonical = self.repository.get_for_update(request.canonical_issue_id)
+        if canonical is None:
+            raise self._not_found()
+        if canonical.status in (
+            IssueStatus.RESOLVED,
+            IssueStatus.REJECTED,
+            IssueStatus.DUPLICATE,
+        ):
+            raise AppError(
+                code="canonical_issue_not_markable",
+                message="The issue kept as original must be active and non-duplicate.",
+                status_code=409,
+            )
+
+        duplicates: list[Issue] = []
+        for issue_id in request.duplicate_issue_ids:
+            issue = self.repository.get_for_update(issue_id)
+            if issue is None:
+                raise self._not_found()
+            if issue.status in (
+                IssueStatus.RESOLVED,
+                IssueStatus.REJECTED,
+                IssueStatus.DUPLICATE,
+            ):
+                raise AppError(
+                    code="duplicate_issue_not_markable",
+                    message="Only active, non-duplicate issues can be marked as duplicates.",
+                    status_code=409,
+                )
+            duplicates.append(issue)
+
+        current_time = now_utc()
+        note = self._duplicate_note(canonical, request.reason)
+        marked_records: list[AdminIssueRecord] = []
+        for issue in duplicates:
+            previous = issue.status
+            issue.status = IssueStatus.DUPLICATE
+            issue.duplicate_of_issue_id = canonical.id
+            issue.duplicate_of = canonical
+            issue.duplicate_marked_at = current_time
+            issue.updated_at = current_time
+            update = self.repository.add_update(
+                IssueUpdate(
+                    issue_id=issue.id,
+                    from_status=previous,
+                    to_status=IssueStatus.DUPLICATE,
+                    note=note,
+                    actor_type=UpdateActorType.ADMIN,
+                ),
+            )
+            issue.updates = [*issue.updates, update]
+            self._recalculate_issue_area(issue, IssueStatus.DUPLICATE)
+            marked_records.append(
+                AdminIssueRecord(
+                    issue=issue,
+                    verification_count=community_counts(
+                        self.repository.community_counts(issue.id),
+                    ).saw_this_too,
+                ),
+            )
+        self.repository.flush()
+
+        return DuplicateIssueResolutionResponse(
+            canonical_issue=summary(
+                AdminIssueRecord(
+                    issue=canonical,
+                    verification_count=community_counts(
+                        self.repository.community_counts(canonical.id),
+                    ).saw_this_too,
+                ),
+            ),
+            duplicates_marked=[summary(record) for record in marked_records],
+        )
+
     def _detail(self, issue: Issue) -> AdminIssueDetail:
         counts = community_counts(self.repository.community_counts(issue.id))
         return AdminIssueDetail(
@@ -213,6 +294,18 @@ class AdminService:
             event_type = "admin_rejected"
         elif to_status is IssueStatus.REPORTED:
             event_type = "admin_restored"
+        elif to_status is IssueStatus.DUPLICATE:
+            event_type = "admin_duplicate"
         else:
             return
         self.area_score_trigger.recalculate_issue_area(issue, event_type=event_type)
+
+    @staticmethod
+    def _duplicate_note(canonical: Issue, reason: str | None) -> str:
+        note = (
+            f"Marked as a duplicate of {canonical.public_reference}: {canonical.title}. "
+            "Follow the original issue for updates."
+        )
+        if reason:
+            note = f"{note} Reason: {reason}"
+        return note

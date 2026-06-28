@@ -3,12 +3,13 @@ from datetime import datetime
 from typing import Any, Protocol
 from uuid import UUID
 
-from sqlalchemy import Select, and_, case, func, select
+from sqlalchemy import Select, and_, case, func, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
-from app.domain.enums import CommunityActionType, IssueSort
+from app.domain.enums import CommunityActionType, IssueSort, IssueStatus
+from app.domain.issue_duplicates import DUPLICATE_PUBLIC_RETENTION, now_utc
 from app.models.community_action import CommunityAction
 from app.models.issue import Issue
 from app.models.issue_update import IssueUpdate
@@ -51,7 +52,7 @@ class IssueRepository(Protocol):
 
 
 def _filtered_issue_ids(query: IssueListQuery) -> Select[tuple[UUID]]:
-    statement = select(Issue.id)
+    statement = select(Issue.id).where(Issue.status != IssueStatus.DUPLICATE)
     if query.category is not None:
         statement = statement.where(Issue.category == query.category)
     if query.severity is not None:
@@ -63,6 +64,21 @@ def _filtered_issue_ids(query: IssueListQuery) -> Select[tuple[UUID]]:
             Issue.location.icontains(query.location.strip(), autoescape=True),
         )
     return statement
+
+
+def _public_detail_visibility_filter(
+    original_issue: Any,
+    duplicate_cutoff: datetime,
+) -> ColumnElement[bool]:
+    return or_(
+        Issue.status != IssueStatus.DUPLICATE,
+        and_(
+            Issue.status == IssueStatus.DUPLICATE,
+            Issue.duplicate_marked_at > duplicate_cutoff,
+            Issue.duplicate_of_issue_id.is_not(None),
+            original_issue.status != IssueStatus.RESOLVED,
+        ),
+    )
 
 
 def _issue_order(
@@ -122,10 +138,14 @@ class SQLAlchemyIssueRepository:
         return records, total
 
     def get_public_detail(self, issue_id: UUID) -> Issue | None:
+        original_issue = aliased(Issue)
+        duplicate_cutoff = now_utc() - DUPLICATE_PUBLIC_RETENTION
         return self._session.scalar(
             select(Issue)
+            .outerjoin(original_issue, Issue.duplicate_of_issue_id == original_issue.id)
             .where(Issue.id == issue_id)
-            .options(selectinload(Issue.updates)),
+            .where(_public_detail_visibility_filter(original_issue, duplicate_cutoff))
+            .options(selectinload(Issue.updates), selectinload(Issue.duplicate_of)),
         )
 
     def get_for_update(self, issue_id: UUID) -> Issue | None:

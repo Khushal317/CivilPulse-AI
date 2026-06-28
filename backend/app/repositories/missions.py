@@ -88,7 +88,11 @@ def _aware_datetime(value: datetime) -> datetime:
 class MissionRepository(Protocol):
     def add(self, mission: Mission) -> Mission: ...
 
+    def delete(self, mission: Mission) -> None: ...
+
     def generation_context(self, *, issue_limit: int = 50) -> MissionContext: ...
+
+    def get_area(self, area_id: UUID) -> Area | None: ...
 
     def get_detail(self, mission_id: UUID) -> Mission | None: ...
 
@@ -131,6 +135,13 @@ class SQLAlchemyMissionRepository:
         self._session.add(mission)
         self._session.flush()
         return mission
+
+    def delete(self, mission: Mission) -> None:
+        self._session.delete(mission)
+        self._session.flush()
+
+    def get_area(self, area_id: UUID) -> Area | None:
+        return self._session.get(Area, area_id)
 
     def generation_context(self, *, issue_limit: int = 50) -> MissionContext:
         areas = list(

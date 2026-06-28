@@ -163,6 +163,12 @@ export function MissionDetailPage() {
             </div>
             <p className="admin-muted">{data.ai_reason}</p>
             <p className="admin-muted">{data.joined_count} citizen(s) joined this mission.</p>
+            {data.status === "completed" && (
+              <p className="operations-action">
+                Mission completed — the reward impact has been applied to this area’s Civic
+                Genome.
+              </p>
+            )}
           </Card>
 
           <Card padding="large">

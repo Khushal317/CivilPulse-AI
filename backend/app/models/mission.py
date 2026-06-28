@@ -56,7 +56,7 @@ class Mission(TimestampMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    area: Mapped["Area"] = relationship()
+    area: Mapped["Area"] = relationship(back_populates="missions")
     actions: Mapped[list["MissionAction"]] = relationship(
         back_populates="mission",
         cascade="all, delete-orphan",

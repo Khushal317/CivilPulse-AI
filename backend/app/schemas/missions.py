@@ -4,6 +4,7 @@ from uuid import UUID
 
 from pydantic import ConfigDict, Field, model_validator
 
+from app.domain.areas import AreaScoreKey
 from app.domain.enums import IssueCategory
 from app.domain.missions import MissionActionType, MissionStatus, MissionType
 from app.schemas.common import APIModel
@@ -80,6 +81,32 @@ class AdminMissionListResponse(APIModel):
     active: list[MissionDetail]
     completed: list[MissionDetail]
     expired: list[MissionDetail]
+
+
+class ManualMissionDraft(APIModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(min_length=8, max_length=180)
+    area_id: UUID
+    mission_type: MissionType
+    goal_description: str = Field(min_length=20, max_length=700)
+    target_count: int = Field(ge=1, le=500)
+    category: IssueCategory | None = None
+    reward_points: int = Field(default=20, ge=0, le=100)
+    reward_score_key: AreaScoreKey = AreaScoreKey.PARTICIPATION
+    ai_reason: str = Field(min_length=20, max_length=900)
+    linked_issue_ids: list[UUID] = Field(default_factory=list, max_length=10)
+    expires_in_days: int = Field(default=7, ge=1, le=30)
+
+    @model_validator(mode="after")
+    def validate_reward_score_key(self) -> "ManualMissionDraft":
+        if self.reward_score_key is AreaScoreKey.OVERALL:
+            raise ValueError("Manual mission rewards must target a component score.")
+        return self
+
+
+class ManualMissionCreate(ManualMissionDraft):
+    publish: bool = False
 
 
 class GeneratedMissionCandidate(APIModel):

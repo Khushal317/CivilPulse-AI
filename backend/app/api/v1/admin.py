@@ -7,6 +7,7 @@ from app.api.dependencies import (
     AdminAuthServiceDependency,
     AdminServiceDependency,
     MissionGenerationServiceDependency,
+    MissionRefinementServiceDependency,
     MissionServiceDependency,
     OperationsServiceDependency,
     SettingsDependency,
@@ -20,8 +21,16 @@ from app.schemas.admin import (
     AdminLoginRequest,
     AdminSessionResponse,
     AdminStatusUpdateRequest,
+    DuplicateIssueResolutionRequest,
+    DuplicateIssueResolutionResponse,
 )
-from app.schemas.missions import AdminMissionListResponse, MissionDetail, MissionGenerationResponse
+from app.schemas.missions import (
+    AdminMissionListResponse,
+    ManualMissionCreate,
+    ManualMissionDraft,
+    MissionDetail,
+    MissionGenerationResponse,
+)
 from app.schemas.operations import OperationsReportResponse
 from app.services.admin_auth import ADMIN_COOKIE_NAME, AuthenticatedAdmin
 
@@ -129,6 +138,15 @@ def list_issues(
     )
 
 
+@router.post("/issues/duplicates", response_model=DuplicateIssueResolutionResponse)
+def mark_duplicate_issues(
+    request: DuplicateIssueResolutionRequest,
+    service: AdminServiceDependency,
+    _admin: AdminCSRFDependency,
+) -> DuplicateIssueResolutionResponse:
+    return service.mark_duplicates(request)
+
+
 @router.get("/issues/{issue_id}", response_model=AdminIssueDetail)
 def get_issue(
     issue_id: UUID,
@@ -172,6 +190,24 @@ def list_admin_missions(
     return service.list_admin()
 
 
+@router.post("/missions/manual/refine", response_model=ManualMissionDraft)
+def refine_manual_mission(
+    draft: ManualMissionDraft,
+    service: MissionRefinementServiceDependency,
+    _admin: AdminCSRFDependency,
+) -> ManualMissionDraft:
+    return service.refine(draft)
+
+
+@router.post("/missions/manual", response_model=MissionDetail)
+def create_manual_mission(
+    mission: ManualMissionCreate,
+    service: MissionServiceDependency,
+    _admin: AdminCSRFDependency,
+) -> MissionDetail:
+    return service.create_manual(mission)
+
+
 @router.post("/missions/{mission_id}/publish", response_model=MissionDetail)
 def publish_mission(
     mission_id: UUID,
@@ -179,6 +215,16 @@ def publish_mission(
     _admin: AdminCSRFDependency,
 ) -> MissionDetail:
     return service.publish(mission_id)
+
+
+@router.delete("/missions/{mission_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_mission(
+    mission_id: UUID,
+    service: MissionServiceDependency,
+    _admin: AdminCSRFDependency,
+) -> Response:
+    service.delete(mission_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/missions/{mission_id}/expire", response_model=MissionDetail)

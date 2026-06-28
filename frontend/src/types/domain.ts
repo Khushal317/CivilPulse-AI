@@ -15,7 +15,8 @@ export type IssueStatus =
   | "escalated"
   | "in_progress"
   | "resolved"
-  | "rejected";
+  | "rejected"
+  | "duplicate";
 
 export type IssueSort = "newest" | "oldest" | "most_verified" | "severity";
 

@@ -5,6 +5,7 @@ import { AdminDashboardPage } from "../features/admin/AdminDashboardPage";
 import { AdminIssueDetailPage } from "../features/admin/AdminIssueDetailPage";
 import { AdminIssuesPage } from "../features/admin/AdminIssuesPage";
 import { AdminLoginPage } from "../features/admin/AdminLoginPage";
+import { AdminMissionsPage } from "../features/admin/AdminMissionsPage";
 import { AreaDetailPage } from "../features/areas/AreaDetailPage";
 import { NeighborhoodArenaPage } from "../features/areas/NeighborhoodArenaPage";
 import { RankingsPage } from "../features/areas/RankingsPage";
@@ -85,6 +86,10 @@ export const appRoutes: RouteObject[] = [
       {
         path: "issues/:issueId",
         element: <AdminIssueDetailPage />,
+      },
+      {
+        path: "missions",
+        element: <AdminMissionsPage />,
       },
     ],
   },

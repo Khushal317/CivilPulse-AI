@@ -1,7 +1,8 @@
 import uuid
+from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ForeignKey, Index, String, Text
+from sqlalchemy import DateTime, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -23,6 +24,7 @@ class Issue(TimestampMixin, Base):
         Index("ix_issues_admin_updated", "updated_at", "id"),
         Index("ix_issues_priority_queue", "severity", "status", "created_at"),
         Index("ix_issues_area_status", "area_id", "status"),
+        Index("ix_issues_duplicate_retention", "status", "duplicate_marked_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -63,8 +65,17 @@ class Issue(TimestampMixin, Base):
     area_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("areas.id", ondelete="SET NULL"),
     )
+    duplicate_of_issue_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("issues.id", ondelete="SET NULL"),
+    )
+    duplicate_marked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     area: Mapped["Area | None"] = relationship(back_populates="issues")
+    duplicate_of: Mapped["Issue | None"] = relationship(
+        "Issue",
+        foreign_keys=[duplicate_of_issue_id],
+        remote_side=[id],
+    )
     updates: Mapped[list["IssueUpdate"]] = relationship(
         back_populates="issue",
         cascade="all, delete-orphan",

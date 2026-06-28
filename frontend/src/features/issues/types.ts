@@ -47,6 +47,13 @@ export interface PublicIssueListResponse {
   total_pages: number;
 }
 
+export interface PublicIssueDuplicateReference {
+  id: string;
+  public_reference: string;
+  title: string;
+  status: IssueStatus;
+}
+
 export interface IssueTrackerFilters {
   page: number;
   pageSize: number;
@@ -69,6 +76,8 @@ export interface PublicIssueDetail extends PublicIssueListItem {
   community_counts: CommunityCounts;
   updates: PublicIssueUpdate[];
   viewer_actions: CommunityActionType[];
+  duplicate_of?: PublicIssueDuplicateReference | null;
+  duplicate_marked_at?: string | null;
 }
 
 export interface CommunityActionResponse {

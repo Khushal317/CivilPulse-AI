@@ -7,6 +7,10 @@ import type {
   AdminMissionListResponse,
   AdminSession,
   AdminStatusUpdate,
+  DuplicateIssueResolutionRequest,
+  DuplicateIssueResolutionResponse,
+  ManualMissionCreate,
+  ManualMissionDraft,
   MissionGenerationResponse,
   OperationsReport,
 } from "./types";
@@ -68,6 +72,17 @@ export function updateAdminIssueStatus(
   });
 }
 
+export function resolveDuplicateIssues(
+  request: DuplicateIssueResolutionRequest,
+  csrfToken: string,
+): Promise<DuplicateIssueResolutionResponse> {
+  return apiRequest<DuplicateIssueResolutionResponse>("/api/v1/admin/issues/duplicates", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: { ...request },
+  });
+}
+
 export function getLatestOperationsReport(
   signal?: AbortSignal,
 ): Promise<OperationsReport | null> {
@@ -100,6 +115,35 @@ export function publishMission(missionId: string, csrfToken: string): Promise<Mi
   return apiRequest<MissionDetail>(`/api/v1/admin/missions/${missionId}/publish`, {
     method: "POST",
     headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
+export function deleteMission(missionId: string, csrfToken: string): Promise<void> {
+  return apiRequest<void>(`/api/v1/admin/missions/${missionId}`, {
+    method: "DELETE",
+    headers: { "X-CSRF-Token": csrfToken },
+  });
+}
+
+export function refineManualMission(
+  draft: ManualMissionDraft,
+  csrfToken: string,
+): Promise<ManualMissionDraft> {
+  return apiRequest<ManualMissionDraft>("/api/v1/admin/missions/manual/refine", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: { ...draft },
+  });
+}
+
+export function createManualMission(
+  mission: ManualMissionCreate,
+  csrfToken: string,
+): Promise<MissionDetail> {
+  return apiRequest<MissionDetail>("/api/v1/admin/missions/manual", {
+    method: "POST",
+    headers: { "X-CSRF-Token": csrfToken },
+    body: { ...mission },
   });
 }
 

@@ -7,6 +7,7 @@ from app.api.dependencies import (
     get_admin_auth_service,
     get_admin_service,
     get_mission_generation_service,
+    get_mission_refinement_service,
     get_mission_service,
     get_operations_service,
 )
@@ -26,10 +27,14 @@ from app.schemas.admin import (
     AdminIssueSummary,
     AdminStatusUpdateRequest,
     CategoryMetric,
+    DuplicateIssueResolutionRequest,
+    DuplicateIssueResolutionResponse,
 )
 from app.schemas.issues import CommunityCounts
 from app.schemas.missions import (
     AdminMissionListResponse,
+    ManualMissionCreate,
+    ManualMissionDraft,
     MissionAreaSummary,
     MissionDetail,
     MissionGenerationResponse,
@@ -100,6 +105,9 @@ def detail(status: IssueStatus = IssueStatus.REPORTED) -> AdminIssueDetail:
 
 
 class FakeRouteAdminService:
+    def __init__(self) -> None:
+        self.duplicate_requests: list[DuplicateIssueResolutionRequest] = []
+
     def dashboard(self) -> AdminDashboardResponse:
         return AdminDashboardResponse(
             metrics=AdminDashboardMetrics(
@@ -134,6 +142,24 @@ class FakeRouteAdminService:
     ) -> AdminIssueDetail:
         assert issue_id == UUID(int=1)
         return detail(request.to_status)
+
+    def mark_duplicates(
+        self,
+        request: DuplicateIssueResolutionRequest,
+    ) -> DuplicateIssueResolutionResponse:
+        self.duplicate_requests.append(request)
+        duplicate = summary().model_copy(
+            update={
+                "id": request.duplicate_issue_ids[0],
+                "public_reference": "CP-20260625-00000002",
+                "title": "Road crater near school",
+                "status": IssueStatus.DUPLICATE,
+            },
+        )
+        return DuplicateIssueResolutionResponse(
+            canonical_issue=summary(),
+            duplicates_marked=[duplicate],
+        )
 
 
 def operations_report() -> OperationsReportResponse:
@@ -287,6 +313,8 @@ class FakeRouteMissionService:
         self.published: list[UUID] = []
         self.expired: list[UUID] = []
         self.completed: list[UUID] = []
+        self.deleted: list[UUID] = []
+        self.created: list[ManualMissionCreate] = []
 
     def list_admin(self) -> AdminMissionListResponse:
         self.list_calls += 1
@@ -309,11 +337,39 @@ class FakeRouteMissionService:
         self.completed.append(mission_id)
         return route_mission(mission_id=mission_id, status=MissionStatus.COMPLETED)
 
+    def delete(self, mission_id: UUID) -> None:
+        self.deleted.append(mission_id)
+
+    def create_manual(self, mission: ManualMissionCreate) -> MissionDetail:
+        self.created.append(mission)
+        return route_mission(
+            mission_id=UUID(int=35),
+            status=MissionStatus.ACTIVE if mission.publish else MissionStatus.DRAFT,
+        )
+
+
+class FakeRouteMissionRefinementService:
+    def __init__(self) -> None:
+        self.refined: list[ManualMissionDraft] = []
+
+    def refine(self, draft: ManualMissionDraft) -> ManualMissionDraft:
+        self.refined.append(draft)
+        return draft.model_copy(
+            update={
+                "title": f"Verify {draft.title}",
+                "goal_description": (
+                    f"{draft.goal_description.rstrip('.')} with safe public observations."
+                ),
+            },
+        )
+
 
 def configure_admin_overrides(
     operations_service: FakeRouteOperationsService | None = None,
     mission_generation_service: FakeRouteMissionGenerationService | None = None,
     mission_service: FakeRouteMissionService | None = None,
+    mission_refinement_service: FakeRouteMissionRefinementService | None = None,
+    admin_service: FakeRouteAdminService | None = None,
 ) -> AdminAuthService:
     auth = AdminAuthService(
         repository=RouteSessionRepository(),
@@ -325,7 +381,7 @@ def configure_admin_overrides(
         rate_limiter=LoginRateLimiter(5, 15),
     )
     app.dependency_overrides[get_admin_auth_service] = lambda: auth
-    app.dependency_overrides[get_admin_service] = lambda: FakeRouteAdminService()
+    app.dependency_overrides[get_admin_service] = lambda: admin_service or FakeRouteAdminService()
     app.dependency_overrides[get_operations_service] = (
         lambda: operations_service or FakeRouteOperationsService()
     )
@@ -334,6 +390,9 @@ def configure_admin_overrides(
     )
     app.dependency_overrides[get_mission_service] = (
         lambda: mission_service or FakeRouteMissionService()
+    )
+    app.dependency_overrides[get_mission_refinement_service] = (
+        lambda: mission_refinement_service or FakeRouteMissionRefinementService()
     )
     return auth
 
@@ -390,6 +449,40 @@ def test_login_session_protected_data_csrf_update_and_logout(
     assert updated.json()["status"] == "in_progress"
     assert logout.status_code == 204
     assert after_logout.status_code == 401
+
+
+def test_admin_can_mark_duplicate_issues_with_csrf(client: TestClient) -> None:
+    admin_service = FakeRouteAdminService()
+    configure_admin_overrides(admin_service=admin_service)
+    login = client.post(
+        "/api/v1/admin/auth/login",
+        json={"username": "admin", "password": "route-password"},
+    )
+    csrf = login.json()["csrf_token"]
+
+    missing_csrf = client.post(
+        "/api/v1/admin/issues/duplicates",
+        json={
+            "canonical_issue_id": str(UUID(int=1)),
+            "duplicate_issue_ids": [str(UUID(int=2))],
+            "reason": "Both reports describe the same road damage.",
+        },
+    )
+    resolved = client.post(
+        "/api/v1/admin/issues/duplicates",
+        headers={"X-CSRF-Token": csrf},
+        json={
+            "canonical_issue_id": str(UUID(int=1)),
+            "duplicate_issue_ids": [str(UUID(int=2))],
+            "reason": "Both reports describe the same road damage.",
+        },
+    )
+
+    assert missing_csrf.status_code == 403
+    assert resolved.status_code == 200
+    assert resolved.json()["canonical_issue"]["id"] == str(UUID(int=1))
+    assert resolved.json()["duplicates_marked"][0]["status"] == "duplicate"
+    assert admin_service.duplicate_requests[0].canonical_issue_id == UUID(int=1)
 
 
 def test_admin_operations_endpoints_require_admin_and_csrf(
@@ -554,6 +647,10 @@ def test_admin_can_list_and_manage_missions(client: TestClient) -> None:
         f"/api/v1/admin/missions/{UUID(int=32)}/complete",
         headers={"X-CSRF-Token": csrf},
     )
+    deleted = client.delete(
+        f"/api/v1/admin/missions/{UUID(int=31)}",
+        headers={"X-CSRF-Token": csrf},
+    )
 
     assert listed.status_code == 200
     assert listed.json()["drafts"][0]["status"] == "draft"
@@ -564,6 +661,55 @@ def test_admin_can_list_and_manage_missions(client: TestClient) -> None:
     assert published.json()["status"] == "active"
     assert expired.json()["status"] == "expired"
     assert completed.json()["status"] == "completed"
+    assert deleted.status_code == 204
     assert mission_service.published == [UUID(int=31)]
     assert mission_service.expired == [UUID(int=32)]
     assert mission_service.completed == [UUID(int=32)]
+    assert mission_service.deleted == [UUID(int=31)]
+
+
+def test_admin_can_create_and_refine_manual_missions(client: TestClient) -> None:
+    mission_service = FakeRouteMissionService()
+    refinement_service = FakeRouteMissionRefinementService()
+    configure_admin_overrides(
+        mission_service=mission_service,
+        mission_refinement_service=refinement_service,
+    )
+    login = client.post(
+        "/api/v1/admin/auth/login",
+        json={"username": "admin", "password": "route-password"},
+    )
+    csrf = login.json()["csrf_token"]
+    payload = {
+        "title": "Road damage near DMART",
+        "area_id": str(UUID(int=1)),
+        "mission_type": "verification",
+        "goal_description": "Ask residents to safely verify the visible road damage.",
+        "target_count": 3,
+        "category": "road_damage",
+        "reward_points": 20,
+        "reward_score_key": "participation",
+        "ai_reason": "This mission helps gather safe public confirmation before follow-up.",
+        "linked_issue_ids": [],
+        "expires_in_days": 7,
+    }
+
+    missing_csrf = client.post("/api/v1/admin/missions/manual", json=payload | {"publish": True})
+    refined = client.post(
+        "/api/v1/admin/missions/manual/refine",
+        headers={"X-CSRF-Token": csrf},
+        json=payload,
+    )
+    created = client.post(
+        "/api/v1/admin/missions/manual",
+        headers={"X-CSRF-Token": csrf},
+        json=payload | {"publish": True},
+    )
+
+    assert missing_csrf.status_code == 403
+    assert refined.status_code == 200
+    assert refined.json()["title"] == "Verify Road damage near DMART"
+    assert created.status_code == 200
+    assert created.json()["status"] == "active"
+    assert refinement_service.refined[0].title == "Road damage near DMART"
+    assert mission_service.created[0].publish is True

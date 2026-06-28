@@ -125,6 +125,57 @@ def test_operations_service_returns_latest_report_without_analyzing() -> None:
     assert latest.model_used == "system-empty"
 
 
+def test_latest_operations_report_hides_duplicate_clusters_with_inactive_issues() -> None:
+    repository = FakeOperationsRepository([operations_record(1)])
+    report = CivicOperationsReport(
+        id=UUID(int=40),
+        generated_at=datetime(2026, 6, 28, 10, tzinfo=UTC),
+        created_at=datetime(2026, 6, 28, 10, tzinfo=UTC),
+        total_issues_analyzed=2,
+        model_used="stored-report",
+        executive_summary="Stored report with a stale duplicate cluster.",
+        urgent_issues_json=[],
+        duplicate_clusters_json=[
+            {
+                "cluster_title": "Possible duplicate road reports",
+                "issues": [
+                    {
+                        "issue_id": str(UUID(int=1)),
+                        "public_reference": "CP-20260626-00000001",
+                        "title": "Severe pothole near school gate 1",
+                    },
+                    {
+                        "issue_id": str(UUID(int=2)),
+                        "public_reference": "CP-20260626-00000002",
+                        "title": "Severe pothole near school gate 2",
+                    },
+                ],
+                "reason": "Both reports describe the same place.",
+                "recommended_action": "Keep one and mark the other as duplicate.",
+            },
+        ],
+        area_hotspots_json=[
+            {
+                "area": "Sector 12",
+                "issue_count": 1,
+                "main_categories": ["road_damage"],
+                "risk_level": "medium",
+                "insight": "One active issue remains.",
+            },
+        ],
+        department_priorities_json=[],
+        escalation_messages_json=[],
+        predicted_risks_json=[],
+        raw_response_json={"executive_summary": "Stored report with a stale cluster."},
+    )
+    repository.saved_reports.append(report)
+
+    latest = OperationsService(repository=repository, analyzer=FailingAnalyzer()).latest_report()
+
+    assert latest is not None
+    assert latest.duplicate_clusters == []
+
+
 def test_operations_service_returns_none_when_latest_report_is_missing() -> None:
     repository = FakeOperationsRepository([])
 

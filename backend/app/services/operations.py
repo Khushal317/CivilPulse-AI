@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast
+from uuid import UUID
 
 from pydantic import ValidationError
 
@@ -8,6 +9,7 @@ from app.core.errors import AppError
 from app.models.civic_operations_report import CivicOperationsReport
 from app.repositories.operations import OperationsIssueRecord, OperationsRepository
 from app.schemas.operations import (
+    DuplicateCluster,
     OperationsAnalysis,
     OperationsIssueInput,
     OperationsReportResponse,
@@ -72,6 +74,25 @@ def report_response(report: CivicOperationsReport) -> OperationsReportResponse:
     )
 
 
+def _active_issue_ids(records: list[OperationsIssueRecord]) -> set[UUID]:
+    return {UUID(record.issue_id) for record in records}
+
+
+def _prune_stale_duplicate_clusters(
+    response: OperationsReportResponse,
+    *,
+    active_issue_ids: set[UUID],
+) -> OperationsReportResponse:
+    duplicate_clusters: list[DuplicateCluster] = [
+        cluster
+        for cluster in response.duplicate_clusters
+        if all(issue.issue_id in active_issue_ids for issue in cluster.issues)
+    ]
+    if len(duplicate_clusters) == len(response.duplicate_clusters):
+        return response
+    return response.model_copy(update={"duplicate_clusters": duplicate_clusters})
+
+
 @dataclass(slots=True)
 class OperationsService:
     repository: OperationsRepository
@@ -103,4 +124,8 @@ class OperationsService:
         report = self.repository.latest_report()
         if report is None:
             return None
-        return report_response(report)
+        active_records = self.repository.active_issues_for_analysis(current_time=now_utc())
+        return _prune_stale_duplicate_clusters(
+            report_response(report),
+            active_issue_ids=_active_issue_ids(active_records),
+        )

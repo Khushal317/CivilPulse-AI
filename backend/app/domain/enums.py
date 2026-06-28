@@ -32,6 +32,7 @@ class IssueStatus(StrEnum):
     IN_PROGRESS = "in_progress"
     RESOLVED = "resolved"
     REJECTED = "rejected"
+    DUPLICATE = "duplicate"
 
 
 class CommunityActionType(StrEnum):

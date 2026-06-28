@@ -3,6 +3,7 @@ import { NavLink } from "react-router-dom";
 const adminItems = [
   { to: "/admin", label: "Overview", end: true },
   { to: "/admin/issues", label: "Issues", end: false },
+  { to: "/admin/missions", label: "Missions", end: false },
 ];
 
 export function AdminNavigation() {
@@ -26,4 +27,3 @@ export function AdminNavigation() {
     </nav>
   );
 }
-

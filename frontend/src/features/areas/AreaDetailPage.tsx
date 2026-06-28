@@ -9,7 +9,7 @@ import { Card } from "../../components/ui/Card";
 import { getArea } from "./api";
 import { AreaScoreBadge } from "./AreaScoreBadge";
 import { statusLabel } from "./areaLabels";
-import type { AreaDetail, AreaScoreBreakdown } from "./types";
+import type { AreaDetail, AreaInsight, AreaScoreBreakdown } from "./types";
 
 const scoreLabels: Array<keyof AreaScoreBreakdown> = [
   "infrastructure",
@@ -38,6 +38,7 @@ const eventLabels: Record<string, string> = {
   admin_resolved: "Admin resolved",
   admin_rejected: "Admin rejected",
   admin_restored: "Admin restored",
+  mission_completed: "Mission completed",
   score_recalculated: "Score recalculated",
 };
 
@@ -47,6 +48,20 @@ function eventLabel(eventType: string) {
 
 function label(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function safeInsight(area: AreaDetail): AreaInsight {
+  return (
+    area.insight ?? {
+      explanation:
+        "This Civic Genome is being prepared from public area signals. Check current issues, community missions, and score activity for the latest neighborhood context.",
+      next_best_actions: [
+        "Review active public issues and verify only what can be safely observed.",
+        "Check the community missions page for admin-approved local actions.",
+      ],
+      model_used: "frontend-safe-fallback",
+    }
+  );
 }
 
 function ScoreGrid({ area }: { area: AreaDetail }) {
@@ -104,6 +119,7 @@ export function AreaDetailPage() {
   }
 
   const data = area.data;
+  const insight = safeInsight(data);
 
   return (
     <section className="page-section area-detail-page">
@@ -121,8 +137,8 @@ export function AreaDetailPage() {
             <p className="eyebrow">{data.city} Civic Genome</p>
             <h1>{data.name}</h1>
             <p className="page-copy">
-              This profile shows the current civic health baseline for the area. Score
-              events and missions will make this profile more alive in the next phases.
+              This profile explains what is shaping the area right now: public issues,
+              community actions, admin updates, and completed mission rewards.
             </p>
             <div className="area-card-meta">
               <span>{data.rank ? `Rank #${data.rank}` : "New area"}</span>
@@ -134,6 +150,24 @@ export function AreaDetailPage() {
         </header>
 
         <ScoreGrid area={data} />
+
+        <Card padding="large">
+          <p className="eyebrow">Civic explanation</p>
+          <h2>What this Civic Genome means</h2>
+          <p className="page-copy">{insight.explanation}</p>
+          <dl className="operations-report-meta">
+            <div>
+              <dt>Insight model</dt>
+              <dd>{insight.model_used}</dd>
+            </div>
+          </dl>
+          <h3>Next best actions</h3>
+          <ul className="mission-linked-list">
+            {insight.next_best_actions.map((action) => (
+              <li key={action}>{action}</li>
+            ))}
+          </ul>
+        </Card>
 
         <div className="area-detail-grid">
           <Card padding="large">
@@ -217,10 +251,13 @@ export function AreaDetailPage() {
             <p className="admin-muted">
               {data.active_missions > 0
                 ? `${data.active_missions} active mission${
-                    data.active_missions === 1 ? "" : "s"
-                  } are connected to this area.`
-                : "Missions will appear here after the mission engine is introduced."}
+                    data.active_missions === 1 ? " is" : "s are"
+                  } connected to this area.`
+                : "No active missions are connected to this area right now. Admin-approved missions will appear here when available."}
             </p>
+            <Link className="area-card-link" to="/missions">
+              Browse community missions
+            </Link>
           </Card>
         </div>
       </div>

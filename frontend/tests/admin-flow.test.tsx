@@ -13,6 +13,7 @@ import { AdminDashboardPage } from "../src/features/admin/AdminDashboardPage";
 import { AdminIssueDetailPage } from "../src/features/admin/AdminIssueDetailPage";
 import { AdminIssuesPage } from "../src/features/admin/AdminIssuesPage";
 import { AdminLoginPage } from "../src/features/admin/AdminLoginPage";
+import { AdminMissionsPage } from "../src/features/admin/AdminMissionsPage";
 import { AdminLayout } from "../src/layouts/AdminLayout";
 import { createTestQueryClient } from "./test-utils";
 
@@ -224,6 +225,7 @@ function renderRoute(route: string) {
             <Route index element={<AdminDashboardPage />} />
             <Route element={<AdminIssuesPage />} path="issues" />
             <Route element={<AdminIssueDetailPage />} path="issues/:issueId" />
+            <Route element={<AdminMissionsPage />} path="missions" />
           </Route>
         </Routes>
         <LocationProbe />
@@ -314,6 +316,10 @@ describe("administrator workflow", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("15")).toBeInTheDocument();
     expect(screen.getAllByText("Pothole near school")).toHaveLength(2);
+    expect(screen.getByRole("link", { name: "Open mission console" })).toHaveAttribute(
+      "href",
+      "/admin/missions",
+    );
   });
 
   it("generates an operations report and copies an escalation draft", async () => {
@@ -345,6 +351,31 @@ describe("administrator workflow", () => {
         }
         if (url.includes("/operations/latest")) return Promise.resolve(jsonResponse(null));
         if (url.includes("/admin/missions")) return Promise.resolve(jsonResponse(missionConsole));
+        if (url.includes("/issues/duplicates") && options?.method === "POST") {
+          expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
+          const body =
+            typeof options.body === "string"
+              ? (JSON.parse(options.body) as Record<string, unknown>)
+              : {};
+          expect(body).toMatchObject({
+            canonical_issue_id: issueId,
+            duplicate_issue_ids: ["44444444-4444-4444-8444-444444444444"],
+          });
+          return Promise.resolve(
+            jsonResponse({
+              canonical_issue: issueSummary,
+              duplicates_marked: [
+                {
+                  ...issueSummary,
+                  id: "44444444-4444-4444-8444-444444444444",
+                  public_reference: "CP-20260625-00000002",
+                  title: "Road crater near City School",
+                  status: "duplicate",
+                },
+              ],
+            }),
+          );
+        }
         if (url.includes("/operations/analyze") && options?.method === "POST") {
           expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
           return Promise.resolve(jsonResponse(operationsReport));
@@ -368,6 +399,13 @@ describe("administrator workflow", () => {
       `/admin/issues/${issueId}`,
     );
     expect(screen.getByText("Possible school-zone road duplicates")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Delete duplicates and keep selected" }),
+    );
+    expect(await screen.findByText("Duplicate reports removed")).toBeInTheDocument();
+    expect(
+      await screen.findByText("No possible duplicate clusters found."),
+    ).toBeInTheDocument();
     expect(screen.getByText("Sector 12 has repeated road safety reports.")).toBeInTheDocument();
     expect(screen.getByText("Prioritize school-zone hazards first.")).toBeInTheDocument();
     expect(screen.getByText("If ignored, riders may be injured.")).toBeInTheDocument();
@@ -449,12 +487,75 @@ describe("administrator workflow", () => {
           );
         }
         if (url.includes("/operations/latest")) return Promise.resolve(jsonResponse(null));
+        if (url.includes("/api/v1/areas")) {
+          return Promise.resolve(
+            jsonResponse({
+              items: [
+                {
+                  id: missionDraft.area.id,
+                  name: missionDraft.area.name,
+                  slug: missionDraft.area.slug,
+                  city: missionDraft.area.city,
+                  rank: 1,
+                  status_label: "improving",
+                  scores: {
+                    overall: 70,
+                    infrastructure: 70,
+                    cleanliness: 70,
+                    safety: 70,
+                    participation: 70,
+                    responsiveness: 70,
+                    environment: 70,
+                  },
+                  open_issues: 1,
+                  resolved_this_week: 0,
+                  active_missions: 1,
+                  created_at: "2026-06-27T10:00:00Z",
+                  updated_at: "2026-06-27T10:00:00Z",
+                },
+              ],
+            }),
+          );
+        }
         if (url.includes("/missions/generate") && options?.method === "POST") {
           expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
           return Promise.resolve(
             jsonResponse({
               model_used: "demo-civic-mission-generator-v1",
               created_drafts: [missionDraft],
+            }),
+          );
+        }
+        if (
+          url.includes(`/missions/${missionDraft.id}`) &&
+          options?.method === "DELETE"
+        ) {
+          expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
+          return Promise.resolve(new Response(null, { status: 204 }));
+        }
+        if (url.includes("/missions/manual/refine") && options?.method === "POST") {
+          expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
+          const body =
+            typeof options.body === "string"
+              ? (JSON.parse(options.body) as Record<string, unknown>)
+              : {};
+          return Promise.resolve(
+            jsonResponse({
+              ...body,
+              title: "Verify Road damage near DMART",
+              goal_description:
+                "Ask residents to safely confirm road damage near DMART from public space.",
+            }),
+          );
+        }
+        if (url.includes("/missions/manual") && options?.method === "POST") {
+          expect(new Headers(options.headers).get("X-CSRF-Token")).toBe("csrf-token");
+          return Promise.resolve(
+            jsonResponse({
+              ...missionDraft,
+              title: "Verify Road damage near DMART",
+              status: "active",
+              published_at: "2026-06-28T10:00:00Z",
             }),
           );
         }
@@ -475,7 +576,7 @@ describe("administrator workflow", () => {
       },
     );
     vi.stubGlobal("fetch", fetchMock);
-    renderRoute("/admin");
+    renderRoute("/admin/missions");
 
     expect(await screen.findByRole("heading", { name: "Review and publish community missions" }))
       .toBeInTheDocument();
@@ -488,15 +589,40 @@ describe("administrator workflow", () => {
     await user.click(screen.getByRole("button", { name: "Publish mission" }));
     expect(await screen.findByText("Mission published")).toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Delete draft" }));
+    expect(await screen.findByText("Mission deleted")).toBeInTheDocument();
+
     await user.click(screen.getByRole("button", { name: "Expire mission" }));
     expect(await screen.findByText("Mission expired")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Mark complete" }));
     expect(await screen.findByText("Mission completed")).toBeInTheDocument();
 
+    await user.type(screen.getByLabelText("Mission heading"), "Road damage near DMART");
+    await user.selectOptions(screen.getByLabelText("Neighborhood area"), missionDraft.area.id);
+    await user.type(
+      screen.getByLabelText("Goal description"),
+      "Ask residents to safely confirm road damage near DMART.",
+    );
+    await user.type(
+      screen.getByLabelText("Admin reason"),
+      "This mission is useful because the road damage needs safe public confirmation.",
+    );
+    await user.click(screen.getByRole("button", { name: "Refine with AI" }));
+    expect(await screen.findByText("Mission refined with AI")).toBeInTheDocument();
+    expect(screen.getByLabelText("Mission heading")).toHaveValue(
+      "Verify Road damage near DMART",
+    );
+    await user.click(screen.getByRole("button", { name: "Publish manually" }));
+    expect(await screen.findByText("Manual mission published")).toBeInTheDocument();
+
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(`/admin/missions/${missionDraft.id}/publish`),
       expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining(`/admin/missions/${missionDraft.id}`),
+      expect.objectContaining({ method: "DELETE" }),
     );
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(`/admin/missions/${activeMission.id}/expire`),
@@ -504,6 +630,14 @@ describe("administrator workflow", () => {
     );
     expect(fetchMock).toHaveBeenCalledWith(
       expect.stringContaining(`/admin/missions/${activeMission.id}/complete`),
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/missions/manual/refine"),
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/admin/missions/manual"),
       expect.objectContaining({ method: "POST" }),
     );
   });

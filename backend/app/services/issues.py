@@ -12,6 +12,7 @@ from app.repositories.issues import IssueRepository
 from app.schemas.issues import (
     CommunityActionResponse,
     CommunityCounts,
+    IssueDuplicateReference,
     IssueListItem,
     IssueListQuery,
     IssueListResponse,
@@ -100,10 +101,10 @@ class IssueService:
                 message="The public issue was not found.",
                 status_code=404,
             )
-        if issue.status is IssueStatus.REJECTED:
+        if issue.status in (IssueStatus.REJECTED, IssueStatus.DUPLICATE):
             raise AppError(
                 code="community_actions_unavailable",
-                message="Community actions are unavailable for rejected issues.",
+                message="Community actions are unavailable for this issue.",
                 status_code=409,
             )
 
@@ -179,6 +180,14 @@ class IssueService:
 
     def _detail_response(self, issue: Issue, actor_hash: str) -> IssuePublicDetail:
         counts = _community_counts(self.repository.community_counts(issue.id))
+        duplicate_of = None
+        if issue.duplicate_of is not None:
+            duplicate_of = IssueDuplicateReference(
+                id=issue.duplicate_of.id,
+                public_reference=issue.duplicate_of.public_reference,
+                title=issue.duplicate_of.title,
+                status=issue.duplicate_of.status,
+            )
         return IssuePublicDetail(
             id=issue.id,
             public_reference=issue.public_reference,
@@ -206,4 +215,6 @@ class IssueService:
                 for update in sorted(issue.updates, key=lambda item: item.created_at)
             ],
             viewer_actions=self.repository.viewer_actions(issue.id, actor_hash),
+            duplicate_of=duplicate_of,
+            duplicate_marked_at=issue.duplicate_marked_at,
         )

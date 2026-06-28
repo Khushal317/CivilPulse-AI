@@ -14,14 +14,23 @@ from app.domain.enums import (
 from app.models.issue import Issue
 from app.models.issue_update import IssueUpdate
 from app.repositories.admin_issues import AdminIssueRecord, AdminIssueRepository
-from app.schemas.admin import AdminIssueListQuery, AdminStatusUpdateRequest
+from app.schemas.admin import (
+    AdminIssueListQuery,
+    AdminStatusUpdateRequest,
+    DuplicateIssueResolutionRequest,
+)
 from app.services.admin import AdminService
 
 
-def make_issue(status: IssueStatus = IssueStatus.REPORTED) -> Issue:
+def make_issue(
+    status: IssueStatus = IssueStatus.REPORTED,
+    *,
+    issue_id: UUID | None = None,
+) -> Issue:
     created_at = datetime(2026, 6, 25, tzinfo=UTC)
+    selected_issue_id = issue_id or UUID(int=1)
     issue = Issue(
-        id=UUID(int=1),
+        id=selected_issue_id,
         public_reference="CP-20260625-00000001",
         title="Pothole near school",
         original_description="A resident reported a deep pothole near a school.",
@@ -52,8 +61,10 @@ def make_issue(status: IssueStatus = IssueStatus.REPORTED) -> Issue:
 
 
 class FakeAdminIssueRepository(AdminIssueRepository):
-    def __init__(self, issue: Issue) -> None:
+    def __init__(self, issue: Issue, extra_issues: list[Issue] | None = None) -> None:
         self.issue = issue
+        stored_issues = [issue, *(extra_issues or [])]
+        self.issues = {stored_issue.id: stored_issue for stored_issue in stored_issues}
         self.updates: list[IssueUpdate] = []
 
     def dashboard_counts(self) -> dict[str, int]:
@@ -81,13 +92,13 @@ class FakeAdminIssueRepository(AdminIssueRepository):
         return [AdminIssueRecord(self.issue, 3)], 1
 
     def get_detail(self, issue_id: UUID) -> Issue | None:
-        return self.issue if issue_id == self.issue.id else None
+        return self.issues.get(issue_id)
 
     def get_for_update(self, issue_id: UUID) -> Issue | None:
         return self.get_detail(issue_id)
 
     def community_counts(self, issue_id: UUID) -> dict[CommunityActionType, int]:
-        assert issue_id == self.issue.id
+        assert issue_id in self.issues
         return {CommunityActionType.SAW_THIS_TOO: 3}
 
     def add_update(self, update: IssueUpdate) -> IssueUpdate:
@@ -179,6 +190,32 @@ def test_admin_resolved_rejected_and_restored_statuses_trigger_civic_genome() ->
         (rejected_issue.id, IssueStatus.REJECTED, "admin_rejected"),
         (rejected_issue.id, IssueStatus.REPORTED, "admin_restored"),
     ]
+
+
+def test_admin_marks_duplicates_against_preferred_original() -> None:
+    canonical = make_issue(issue_id=UUID(int=1))
+    duplicate = make_issue(issue_id=UUID(int=2))
+    repository = FakeAdminIssueRepository(canonical, [duplicate])
+    trigger = FakeAreaScoreTrigger()
+
+    result = AdminService(repository, area_score_trigger=trigger).mark_duplicates(
+        DuplicateIssueResolutionRequest(
+            canonical_issue_id=canonical.id,
+            duplicate_issue_ids=[duplicate.id],
+            reason="Both reports describe the same pothole near the school gate.",
+        ),
+    )
+
+    assert result.canonical_issue.id == canonical.id
+    assert result.duplicates_marked[0].id == duplicate.id
+    assert duplicate.status is IssueStatus.DUPLICATE
+    assert duplicate.duplicate_of_issue_id == canonical.id
+    assert duplicate.duplicate_of is canonical
+    assert duplicate.duplicate_marked_at is not None
+    assert repository.updates[0].from_status is IssueStatus.REPORTED
+    assert repository.updates[0].to_status is IssueStatus.DUPLICATE
+    assert "CP-20260625-00000001" in (repository.updates[0].note or "")
+    assert trigger.calls == [(duplicate.id, IssueStatus.DUPLICATE, "admin_duplicate")]
 
 
 def test_invalid_transition_and_missing_rejection_reason_are_rejected() -> None:

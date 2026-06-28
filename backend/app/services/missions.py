@@ -1,15 +1,18 @@
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
+from typing import Protocol
 from uuid import UUID
 
 from app.core.errors import AppError
 from app.domain.enums import CommunityActionType
+from app.domain.mission_titles import mission_duplicate_key
 from app.domain.missions import MissionActionType, MissionStatus
 from app.models.area import Area
 from app.models.mission import Mission
 from app.repositories.missions import MissionRepository
 from app.schemas.missions import (
     AdminMissionListResponse,
+    ManualMissionCreate,
     MissionActionResponse,
     MissionAreaSummary,
     MissionDetail,
@@ -89,11 +92,17 @@ def aware_datetime(value: datetime) -> datetime:
     return value
 
 
+class MissionRewardTrigger(Protocol):
+    def apply_completed_mission_reward(self, mission: Mission) -> object: ...
+
+
 @dataclass(slots=True)
 class MissionService:
     repository: MissionRepository
+    reward_trigger: MissionRewardTrigger | None = None
 
     def list_admin(self) -> AdminMissionListResponse:
+        self.remove_duplicate_drafts()
         drafts: list[MissionDetail] = []
         active: list[MissionDetail] = []
         completed: list[MissionDetail] = []
@@ -120,6 +129,64 @@ class MissionService:
             items=[mission_summary(mission) for mission in self.repository.list_public()],
         )
 
+    def create_manual(self, request: ManualMissionCreate) -> MissionDetail:
+        area = self.repository.get_area(request.area_id)
+        if area is None:
+            raise AppError(
+                code="mission_area_not_found",
+                message="The selected neighborhood area was not found.",
+                status_code=404,
+            )
+        existing_keys = {
+            mission_duplicate_key(
+                title=mission.title,
+                area_id=mission.area_id,
+                category=mission.category,
+            )
+            for mission in self.repository.list_admin()
+            if mission.status in (MissionStatus.DRAFT, MissionStatus.ACTIVE)
+        }
+        key = mission_duplicate_key(
+            title=request.title,
+            area_id=request.area_id,
+            category=request.category,
+        )
+        if key in existing_keys:
+            raise AppError(
+                code="mission_duplicate",
+                message=(
+                    "A draft or active mission with the same normalized heading already "
+                    "exists for this area."
+                ),
+                status_code=409,
+            )
+
+        now = now_utc()
+        mission = Mission(
+            title=request.title,
+            area_id=request.area_id,
+            mission_type=request.mission_type,
+            status=MissionStatus.ACTIVE if request.publish else MissionStatus.DRAFT,
+            goal_description=request.goal_description,
+            target_count=request.target_count,
+            progress_count=0,
+            category=request.category,
+            reward_json={
+                "points": request.reward_points,
+                "score_key": request.reward_score_key.value,
+            },
+            ai_reason=request.ai_reason,
+            linked_issue_ids_json=[str(issue_id) for issue_id in request.linked_issue_ids],
+            model_used="manual-admin",
+            raw_response_json={"source": "manual-admin"},
+            expires_at=now + timedelta(days=request.expires_in_days),
+            published_at=now if request.publish else None,
+            completed_at=None,
+        )
+        self.repository.add(mission)
+        hydrated = self.repository.get_detail(mission.id) or mission
+        return mission_detail(hydrated)
+
     def publish(self, mission_id: UUID) -> MissionDetail:
         mission = self._require_mission(mission_id)
         if mission.status is not MissionStatus.DRAFT:
@@ -134,6 +201,45 @@ class MissionService:
         mission.completed_at = None
         self.repository.flush()
         return mission_detail(mission)
+
+    def delete(self, mission_id: UUID) -> None:
+        mission = self._require_mission(mission_id)
+        if mission.status not in (MissionStatus.DRAFT, MissionStatus.EXPIRED):
+            raise AppError(
+                code="mission_not_deletable",
+                message="Only draft or expired missions can be deleted.",
+                status_code=409,
+            )
+        self.repository.delete(mission)
+
+    def remove_duplicate_drafts(self) -> int:
+        grouped: dict[tuple[str, UUID, str | None], list[Mission]] = {}
+        for mission in self.repository.list_admin():
+            if mission.status is not MissionStatus.DRAFT:
+                continue
+            key = mission_duplicate_key(
+                title=mission.title,
+                area_id=mission.area_id,
+                category=mission.category,
+            )
+            if not key[0]:
+                continue
+            grouped.setdefault(key, []).append(mission)
+
+        removed = 0
+        for duplicates in grouped.values():
+            if len(duplicates) <= 1:
+                continue
+            keep = max(
+                duplicates,
+                key=lambda mission: (mission.created_at, str(mission.id)),
+            )
+            for mission in duplicates:
+                if mission.id == keep.id:
+                    continue
+                self.repository.delete(mission)
+                removed += 1
+        return removed
 
     def expire(self, mission_id: UUID) -> MissionDetail:
         mission = self._require_mission(mission_id)
@@ -159,10 +265,7 @@ class MissionService:
                 message="Only active missions can be manually completed.",
                 status_code=409,
             )
-        mission.status = MissionStatus.COMPLETED
-        mission.progress_count = mission.target_count
-        mission.completed_at = now_utc()
-        self.repository.flush()
+        self._complete_mission(mission)
         return mission_detail(mission)
 
     def get_public_detail(self, mission_id: UUID, actor_hash: str | None = None) -> MissionDetail:
@@ -220,6 +323,8 @@ class MissionService:
             self._record_linked_issue_signal(action_type, actor_hash, normalized_issue_id)
             if mission.progress_count < mission.target_count:
                 mission.progress_count += 1
+            if mission.progress_count >= mission.target_count:
+                self._complete_mission(mission)
             self.repository.flush()
 
         return MissionActionResponse(
@@ -234,6 +339,15 @@ class MissionService:
             ),
             viewer_actions=self.repository.viewer_actions(mission.id, actor_hash),
         )
+
+    def _complete_mission(self, mission: Mission) -> None:
+        if mission.status is MissionStatus.COMPLETED:
+            return
+        mission.status = MissionStatus.COMPLETED
+        mission.progress_count = mission.target_count
+        mission.completed_at = now_utc()
+        if self.reward_trigger is not None:
+            self.reward_trigger.apply_completed_mission_reward(mission)
 
     def _validate_action_issue(
         self,

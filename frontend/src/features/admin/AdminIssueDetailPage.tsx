@@ -25,6 +25,7 @@ const transitions: Record<IssueStatus, IssueStatus[]> = {
   in_progress: ["escalated", "resolved", "rejected"],
   resolved: ["in_progress"],
   rejected: ["reported"],
+  duplicate: [],
 };
 
 const labels: Record<IssueStatus, string> = {
@@ -34,6 +35,7 @@ const labels: Record<IssueStatus, string> = {
   in_progress: "In progress",
   resolved: "Resolved",
   rejected: "Rejected",
+  duplicate: "Duplicate",
 };
 
 const dateFormatter = new Intl.DateTimeFormat(undefined, {

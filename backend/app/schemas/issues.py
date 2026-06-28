@@ -147,6 +147,13 @@ class IssueListResponse(APIModel):
     total_pages: int = Field(ge=0)
 
 
+class IssueDuplicateReference(APIModel):
+    id: UUID
+    public_reference: str
+    title: str
+    status: IssueStatus
+
+
 class IssuePublicDetail(IssueListItem):
     original_description: str
     ai_summary: str
@@ -160,6 +167,8 @@ class IssuePublicDetail(IssueListItem):
     community_counts: CommunityCounts
     updates: list[IssueUpdatePublic]
     viewer_actions: list[CommunityActionType] = Field(default_factory=list)
+    duplicate_of: IssueDuplicateReference | None = None
+    duplicate_marked_at: datetime | None = None
 
 
 class CommunityActionResponse(APIModel):

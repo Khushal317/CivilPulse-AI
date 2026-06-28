@@ -9,7 +9,11 @@ import { Spinner } from "../../components/feedback/Loading";
 import { Badge, SeverityBadge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
-import { analyzeOperationsReport, getLatestOperationsReport } from "./api";
+import {
+  analyzeOperationsReport,
+  getLatestOperationsReport,
+  resolveDuplicateIssues,
+} from "./api";
 import type {
   OperationsAreaHotspot,
   OperationsDepartmentPriority,
@@ -41,6 +45,12 @@ function formatDate(value: string) {
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
+}
+
+function duplicateClusterKey(cluster: OperationsDuplicateCluster, index: number) {
+  return `${index}-${cluster.cluster_title}-${cluster.issues
+    .map((issue) => issue.issue_id)
+    .join("-")}`;
 }
 
 function EmptyOperationsSection({ message }: { message: string }) {
@@ -103,28 +113,87 @@ function UrgentIssues({ issues }: { issues: OperationsUrgentIssue[] }) {
   );
 }
 
-function DuplicateClusters({ clusters }: { clusters: OperationsDuplicateCluster[] }) {
-  if (!clusters.length) {
+interface DuplicateResolutionVariables {
+  clusterKey: string;
+  canonicalIssueId: string;
+  duplicateIssueIds: string[];
+  reason: string;
+}
+
+function DuplicateClusters({
+  clusters,
+  onResolve,
+  resolvedClusterKeys,
+  resolvingClusterKey,
+}: {
+  clusters: OperationsDuplicateCluster[];
+  onResolve: (variables: DuplicateResolutionVariables) => void;
+  resolvedClusterKeys: Set<string>;
+  resolvingClusterKey: string | null;
+}) {
+  const [selectedByCluster, setSelectedByCluster] = useState<Record<string, string>>({});
+  const visibleClusters = clusters.filter(
+    (cluster, index) => !resolvedClusterKeys.has(duplicateClusterKey(cluster, index)),
+  );
+  if (!visibleClusters.length) {
     return <EmptyOperationsSection message="No possible duplicate clusters found." />;
   }
   return (
     <div className="operations-card-list">
-      {clusters.map((cluster) => (
-        <article className="operations-list-card" key={cluster.cluster_title}>
-          <h4>{cluster.cluster_title}</h4>
-          <p>{cluster.reason}</p>
-          <ul className="operations-link-list">
-            {cluster.issues.map((issue) => (
-              <li key={issue.issue_id}>
-                <Link to={`/admin/issues/${issue.issue_id}`}>
-                  {issue.public_reference} · {issue.title}
-                </Link>
-              </li>
-            ))}
-          </ul>
-          <p className="operations-action">{cluster.recommended_action}</p>
-        </article>
-      ))}
+      {visibleClusters.map((cluster, index) => {
+        const clusterKey = duplicateClusterKey(cluster, index);
+        const selectedIssueId = selectedByCluster[clusterKey] ?? cluster.issues[0]?.issue_id ?? "";
+        const duplicateIssueIds = cluster.issues
+          .filter((issue) => issue.issue_id !== selectedIssueId)
+          .map((issue) => issue.issue_id);
+        const isResolving = resolvingClusterKey === clusterKey;
+        return (
+          <article className="operations-list-card" key={clusterKey}>
+            <h4>{cluster.cluster_title}</h4>
+            <p>{cluster.reason}</p>
+            <fieldset className="operations-duplicate-choices">
+              <legend>Choose the original issue to keep</legend>
+              {cluster.issues.map((issue) => (
+                <label key={issue.issue_id}>
+                  <input
+                    checked={selectedIssueId === issue.issue_id}
+                    name={`duplicate-canonical-${clusterKey}`}
+                    onChange={() =>
+                      setSelectedByCluster((current) => ({
+                        ...current,
+                        [clusterKey]: issue.issue_id,
+                      }))
+                    }
+                    type="radio"
+                  />
+                  <span>
+                    <Link to={`/admin/issues/${issue.issue_id}`}>
+                      {issue.public_reference} · {issue.title}
+                    </Link>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <p className="operations-action">{cluster.recommended_action}</p>
+            <Button
+              disabled={cluster.issues.length < 2 || duplicateIssueIds.length === 0}
+              isLoading={isResolving}
+              onClick={() =>
+                onResolve({
+                  clusterKey,
+                  canonicalIssueId: selectedIssueId,
+                  duplicateIssueIds,
+                  reason: cluster.reason,
+                })
+              }
+              size="small"
+              variant="secondary"
+            >
+              Delete duplicates and keep selected
+            </Button>
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -263,7 +332,17 @@ function PredictedRisks({ risks }: { risks: OperationsPredictedRisk[] }) {
   );
 }
 
-function OperationsReportView({ report }: { report: OperationsReport }) {
+function OperationsReportView({
+  onResolveDuplicates,
+  report,
+  resolvedClusterKeys,
+  resolvingClusterKey,
+}: {
+  onResolveDuplicates: (variables: DuplicateResolutionVariables) => void;
+  report: OperationsReport;
+  resolvedClusterKeys: Set<string>;
+  resolvingClusterKey: string | null;
+}) {
   return (
     <div className="operations-report">
       <Card className="operations-summary-card" padding="large">
@@ -295,7 +374,12 @@ function OperationsReportView({ report }: { report: OperationsReport }) {
           <UrgentIssues issues={report.urgent_issues} />
         </ReportSection>
         <ReportSection eyebrow="Patterns" title="Possible duplicate clusters">
-          <DuplicateClusters clusters={report.duplicate_clusters} />
+          <DuplicateClusters
+            clusters={report.duplicate_clusters}
+            onResolve={onResolveDuplicates}
+            resolvedClusterKeys={resolvedClusterKeys}
+            resolvingClusterKey={resolvingClusterKey}
+          />
         </ReportSection>
         <ReportSection eyebrow="Geography" title="Area hotspots">
           <AreaHotspots hotspots={report.area_hotspots} />
@@ -318,6 +402,7 @@ export function OperationsAgentPanel() {
   const session = useAdminSession();
   const queryClient = useQueryClient();
   const { notify } = useNotifications();
+  const [resolvedClusterKeys, setResolvedClusterKeys] = useState<Set<string>>(new Set());
   const latestReport = useQuery({
     queryKey: ["admin-operations-report"],
     queryFn: ({ signal }) => getLatestOperationsReport(signal),
@@ -330,6 +415,36 @@ export function OperationsAgentPanel() {
         title: "Operations report ready",
         message: "The Civic Operations Agent finished analyzing active issues.",
         tone: "success",
+      });
+    },
+  });
+  const resolveDuplicates = useMutation({
+    mutationFn: (variables: DuplicateResolutionVariables) =>
+      resolveDuplicateIssues(
+        {
+          canonical_issue_id: variables.canonicalIssueId,
+          duplicate_issue_ids: variables.duplicateIssueIds,
+          reason: variables.reason,
+        },
+        session.data?.csrf_token ?? "",
+      ),
+    onSuccess: (result, variables) => {
+      setResolvedClusterKeys((current) => new Set(current).add(variables.clusterKey));
+      void queryClient.invalidateQueries({ queryKey: ["admin-dashboard"] });
+      void queryClient.invalidateQueries({ queryKey: ["admin-issues"] });
+      void queryClient.invalidateQueries({ queryKey: ["public-issues"] });
+      void queryClient.invalidateQueries({ queryKey: ["areas"] });
+      notify({
+        title: "Duplicate reports removed",
+        message: `${result.duplicates_marked.length} duplicate report(s) now point to ${result.canonical_issue.public_reference}.`,
+        tone: "success",
+      });
+    },
+    onError: (error) => {
+      notify({
+        title: "Could not remove duplicates",
+        message: error.message,
+        tone: "error",
       });
     },
   });
@@ -390,7 +505,14 @@ export function OperationsAgentPanel() {
         />
       )}
 
-      {report && <OperationsReportView report={report} />}
+      {report && (
+        <OperationsReportView
+          onResolveDuplicates={(variables) => resolveDuplicates.mutate(variables)}
+          report={report}
+          resolvedClusterKeys={resolvedClusterKeys}
+          resolvingClusterKey={resolveDuplicates.variables?.clusterKey ?? null}
+        />
+      )}
     </Card>
   );
 }

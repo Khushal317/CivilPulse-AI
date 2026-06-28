@@ -36,6 +36,7 @@ const mission = {
 
 const missionDetail = {
   ...mission,
+  progress_count: 4,
   linked_issue_ids: ["33333333-3333-4333-8333-333333333333"],
   viewer_actions: [],
 };
@@ -92,7 +93,7 @@ describe("Community Missions", () => {
 
     expect(await screen.findByRole("heading", { name: "Verify repaired streetlights" }))
       .toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "2/5 actions completed" }))
+    expect(screen.getByRole("heading", { name: "4/5 actions completed" }))
       .toBeInTheDocument();
     expect(screen.getByText("20 participation points when completed")).toBeInTheDocument();
     expect(screen.getByText("4 citizen(s) joined this mission.")).toBeInTheDocument();
@@ -117,8 +118,8 @@ describe("Community Missions", () => {
           jsonResponse({
             action_type: "verified_issue",
             accepted: true,
-            mission_status: "active",
-            progress_count: 3,
+            mission_status: "completed",
+            progress_count: 5,
             target_count: 5,
             joined_count: 4,
             viewer_actions: ["verified_issue"],
@@ -145,9 +146,11 @@ describe("Community Missions", () => {
     await user.click(screen.getByRole("button", { name: "Verify linked issue" }));
 
     expect(await screen.findByText("Mission action recorded")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "3/5 actions completed" }))
+    expect(screen.getByRole("heading", { name: "5/5 actions completed" }))
       .toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Recorded" })).toBeDisabled();
+    expect(screen.getByText(/reward impact has been applied/i)).toBeInTheDocument();
+    expect(screen.getByText(/not accepting new actions/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Verify linked issue" })).not.toBeInTheDocument();
   });
 
   it("shows a positive empty state when no missions are active", async () => {

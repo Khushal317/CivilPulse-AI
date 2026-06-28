@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 from app.domain.areas import BASELINE_AREA_SCORE, AreaScoreKey, AreaStatusLabel
 from app.domain.enums import CommunityActionType, IssueCategory, IssueSeverity, IssueStatus
 from app.models.issue import Issue
+from app.models.mission import Mission
 
 COMPONENT_SCORE_KEYS = (
     AreaScoreKey.INFRASTRUCTURE,
@@ -124,6 +125,7 @@ def resolved_category_score_impact(
 def compute_area_score_snapshot(
     issues: list[Issue],
     *,
+    completed_missions: list[Mission] | None = None,
     current_time: datetime,
 ) -> AreaScoreSnapshot:
     if current_time.tzinfo is None:
@@ -131,7 +133,7 @@ def compute_area_score_snapshot(
     components = {key: BASELINE_AREA_SCORE for key in COMPONENT_SCORE_KEYS}
 
     for issue in issues:
-        if issue.status is IssueStatus.REJECTED:
+        if issue.status in (IssueStatus.REJECTED, IssueStatus.DUPLICATE):
             continue
 
         _apply_participation_signal(components, issue)
@@ -140,6 +142,9 @@ def compute_area_score_snapshot(
             _apply_resolved_issue_signal(components, issue)
         elif issue.status in ACTIVE_STATUSES:
             _apply_active_issue_signal(components, issue, current_time=current_time)
+
+    for mission in completed_missions or []:
+        _apply_completed_mission_reward(components, mission)
 
     clamped_components = {key: clamp_score(value) for key, value in components.items()}
     clamped_components[AreaScoreKey.OVERALL] = overall_score(clamped_components)
@@ -194,3 +199,25 @@ def _apply_active_issue_signal(
         components[AreaScoreKey.RESPONSIVENESS] -= 2
     if age_days >= 3 and issue.severity in (IssueSeverity.HIGH, IssueSeverity.CRITICAL):
         components[AreaScoreKey.RESPONSIVENESS] -= 2
+
+
+def mission_reward_score_impact(mission: Mission) -> dict[AreaScoreKey, int]:
+    raw_score_key = mission.reward_json.get("score_key")
+    raw_points = mission.reward_json.get("points")
+    if not isinstance(raw_score_key, str) or raw_score_key == AreaScoreKey.OVERALL.value:
+        return {}
+    if not isinstance(raw_points, int) or raw_points <= 0:
+        return {}
+    try:
+        score_key = AreaScoreKey(raw_score_key)
+    except ValueError:
+        return {}
+    return {score_key: min(raw_points, 20)}
+
+
+def _apply_completed_mission_reward(
+    components: dict[AreaScoreKey, int],
+    mission: Mission,
+) -> None:
+    for key, points in mission_reward_score_impact(mission).items():
+        components[key] += points

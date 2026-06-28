@@ -16,12 +16,18 @@ from app.repositories.reports import SQLAlchemyReportRepository
 from app.services.admin import AdminService
 from app.services.admin_auth import AdminAuthService, get_login_rate_limiter
 from app.services.ai import CivicIssueAnalyzer, get_civic_issue_analyzer
+from app.services.area_explanations import CivicAreaExplainer, get_civic_area_explainer
 from app.services.areas import AreaService
 from app.services.issues import IssueService
 from app.services.mission_generation import (
     CivicMissionGenerator,
     MissionGenerationService,
     get_civic_mission_generator,
+)
+from app.services.mission_refinement import (
+    CivicMissionRefiner,
+    MissionRefinementService,
+    get_civic_mission_refiner,
 )
 from app.services.missions import MissionService
 from app.services.operations import OperationsService
@@ -41,6 +47,14 @@ OperationsAnalyzerDependency = Annotated[
 MissionGeneratorDependency = Annotated[
     CivicMissionGenerator,
     Depends(get_civic_mission_generator),
+]
+MissionRefinerDependency = Annotated[
+    CivicMissionRefiner,
+    Depends(get_civic_mission_refiner),
+]
+AreaExplainerDependency = Annotated[
+    CivicAreaExplainer,
+    Depends(get_civic_area_explainer),
 ]
 
 
@@ -125,15 +139,24 @@ def get_admin_service(session: DatabaseDependency) -> AdminService:
 AdminServiceDependency = Annotated[AdminService, Depends(get_admin_service)]
 
 
-def get_area_service(session: DatabaseDependency) -> AreaService:
-    return AreaService(repository=SQLAlchemyAreaRepository(session))
+def get_area_service(
+    session: DatabaseDependency,
+    explainer: AreaExplainerDependency,
+) -> AreaService:
+    return AreaService(
+        repository=SQLAlchemyAreaRepository(session),
+        explainer=explainer,
+    )
 
 
 AreaServiceDependency = Annotated[AreaService, Depends(get_area_service)]
 
 
 def get_mission_service(session: DatabaseDependency) -> MissionService:
-    return MissionService(repository=SQLAlchemyMissionRepository(session))
+    return MissionService(
+        repository=SQLAlchemyMissionRepository(session),
+        reward_trigger=AreaService(repository=SQLAlchemyAreaRepository(session)),
+    )
 
 
 MissionServiceDependency = Annotated[MissionService, Depends(get_mission_service)]
@@ -152,6 +175,22 @@ def get_mission_generation_service(
 MissionGenerationServiceDependency = Annotated[
     MissionGenerationService,
     Depends(get_mission_generation_service),
+]
+
+
+def get_mission_refinement_service(
+    session: DatabaseDependency,
+    refiner: MissionRefinerDependency,
+) -> MissionRefinementService:
+    return MissionRefinementService(
+        repository=SQLAlchemyMissionRepository(session),
+        refiner=refiner,
+    )
+
+
+MissionRefinementServiceDependency = Annotated[
+    MissionRefinementService,
+    Depends(get_mission_refinement_service),
 ]
 
 

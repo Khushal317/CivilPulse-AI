@@ -9,7 +9,6 @@ import { buttonClassName } from "../../components/ui/buttonStyles";
 import { Card } from "../../components/ui/Card";
 import { getAdminDashboard } from "./api";
 import { AdminIssueTable } from "./AdminIssueTable";
-import { MissionGeneratorPanel } from "./MissionGeneratorPanel";
 import { OperationsAgentPanel } from "./OperationsAgentPanel";
 
 const metricLabels = {
@@ -75,7 +74,22 @@ export function AdminDashboardPage() {
       </div>
 
       <OperationsAgentPanel />
-      <MissionGeneratorPanel />
+
+      <Card padding="large">
+        <div className="admin-section-heading">
+          <div>
+            <p className="eyebrow">Community missions</p>
+            <h2>Civic Mission Console</h2>
+            <p className="admin-muted">
+              Generate AI draft missions, remove duplicates, create manual missions,
+              refine with AI, and publish approved missions from a dedicated workspace.
+            </p>
+          </div>
+          <Link className={buttonClassName("secondary")} to="/admin/missions">
+            Open mission console
+          </Link>
+        </div>
+      </Card>
 
       <div className="admin-dashboard-grid">
         <Card padding="large">

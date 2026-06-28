@@ -10,6 +10,7 @@ from app.domain.areas import BASELINE_AREA_SCORE, DEFAULT_AREA_CITY
 if TYPE_CHECKING:
     from app.models.area_score_event import AreaScoreEvent
     from app.models.issue import Issue
+    from app.models.mission import Mission
 
 
 class Area(TimestampMixin, Base):
@@ -77,6 +78,7 @@ class Area(TimestampMixin, Base):
     status_label: Mapped[str] = mapped_column(String(40), default="improving", nullable=False)
 
     issues: Mapped[list["Issue"]] = relationship(back_populates="area")
+    missions: Mapped[list["Mission"]] = relationship(back_populates="area")
     score_events: Mapped[list["AreaScoreEvent"]] = relationship(
         back_populates="area",
         cascade="all, delete-orphan",

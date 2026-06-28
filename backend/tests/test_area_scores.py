@@ -16,14 +16,17 @@ from app.domain.enums import (
     IssueStatus,
     UrgencyLevel,
 )
+from app.domain.missions import MissionStatus, MissionType
 from app.models.area import Area
 from app.models.community_action import CommunityAction
 from app.models.issue import Issue
+from app.models.mission import Mission
 from app.repositories.areas import SQLAlchemyAreaRepository
 from app.services.area_scores import (
     clamp_score,
     compute_area_score_snapshot,
     issue_category_score_impact,
+    mission_reward_score_impact,
     overall_score,
     status_label,
 )
@@ -91,6 +94,38 @@ def make_issue(
         ai_model="test-model",
         prompt_version="test-v1",
         area=area,
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+
+
+def make_mission(
+    number: int,
+    area: Area,
+    *,
+    points: int = 20,
+    score_key: str = "participation",
+    status: MissionStatus = MissionStatus.COMPLETED,
+) -> Mission:
+    timestamp = datetime(2026, 6, 27, 10, tzinfo=UTC)
+    return Mission(
+        id=UUID(int=number),
+        title=f"Community mission {number}",
+        area=area,
+        mission_type=MissionType.VERIFICATION,
+        status=status,
+        goal_description="Safely verify a public civic issue.",
+        target_count=5,
+        progress_count=5 if status is MissionStatus.COMPLETED else 2,
+        category=IssueCategory.STREETLIGHT,
+        reward_json={"points": points, "score_key": score_key},
+        ai_reason="Mission helps improve public civic evidence.",
+        linked_issue_ids_json=[],
+        model_used="test",
+        raw_response_json={},
+        expires_at=timestamp,
+        published_at=timestamp,
+        completed_at=timestamp if status is MissionStatus.COMPLETED else None,
         created_at=timestamp,
         updated_at=timestamp,
     )
@@ -170,6 +205,40 @@ def test_compute_area_score_snapshot_uses_issues_and_participation() -> None:
     assert snapshot.scores[AreaScoreKey.OVERALL] == 69
 
 
+def test_completed_mission_rewards_are_part_of_score_snapshot() -> None:
+    area = make_area(1, "Sector 12")
+    mission = make_mission(10, area, points=20, score_key="participation")
+
+    snapshot = compute_area_score_snapshot(
+        [],
+        completed_missions=[mission],
+        current_time=datetime(2026, 6, 27, 10, tzinfo=UTC),
+    )
+
+    assert mission_reward_score_impact(mission) == {AreaScoreKey.PARTICIPATION: 20}
+    assert snapshot.scores[AreaScoreKey.PARTICIPATION] == 90
+    assert snapshot.scores[AreaScoreKey.OVERALL] == 73
+
+
+def test_mission_rewards_ignore_invalid_keys_and_cap_points() -> None:
+    area = make_area(1, "Sector 12")
+    huge = make_mission(10, area, points=999, score_key="safety")
+    overall = make_mission(11, area, points=20, score_key="overall")
+    unknown = make_mission(12, area, points=20, score_key="magic")
+
+    snapshot = compute_area_score_snapshot(
+        [],
+        completed_missions=[huge, overall, unknown],
+        current_time=datetime(2026, 6, 27, 10, tzinfo=UTC),
+    )
+
+    assert mission_reward_score_impact(huge) == {AreaScoreKey.SAFETY: 20}
+    assert mission_reward_score_impact(overall) == {}
+    assert mission_reward_score_impact(unknown) == {}
+    assert snapshot.scores[AreaScoreKey.SAFETY] == 90
+    assert snapshot.scores[AreaScoreKey.OVERALL] == 74
+
+
 def test_area_service_recalculates_scores_events_and_ranks(score_session: Session) -> None:
     sector = make_area(1, "Sector 12")
     green = make_area(2, "Green Park")
@@ -228,6 +297,44 @@ def test_recalculate_single_area_ranks_against_all_areas(score_session: Session)
     assert result.resolved_this_week == 0
     assert green.rank == 1
     assert sector.rank == 2
+
+
+def test_completed_mission_reward_records_events_and_updates_rank(
+    score_session: Session,
+) -> None:
+    sector = make_area(1, "Sector 12", overall=60)
+    green = make_area(2, "Green Park", overall=72)
+    sector.missions = [make_mission(10, sector, points=20, score_key="participation")]
+    score_session.add_all([sector, green])
+    score_session.commit()
+
+    result = AreaService(SQLAlchemyAreaRepository(score_session)).apply_completed_mission_reward(
+        sector.missions[0],
+    )
+    score_session.commit()
+
+    events = SQLAlchemyAreaRepository(score_session).recent_score_events(sector.id, limit=10)
+    mission_events = [event for event in events if event.event_type == "mission_completed"]
+    assert result.scores.participation == 90
+    assert sector.rank == 1
+    assert green.rank == 2
+    assert mission_events
+    assert {event.related_mission_id for event in mission_events} == {sector.missions[0].id}
+    assert all("mission completed" in event.reason.lower() for event in mission_events)
+
+    AreaService(SQLAlchemyAreaRepository(score_session)).apply_completed_mission_reward(
+        sector.missions[0],
+    )
+    score_session.commit()
+    repeated_events = [
+        event
+        for event in SQLAlchemyAreaRepository(score_session).recent_score_events(
+            sector.id,
+            limit=20,
+        )
+        if event.event_type == "mission_completed"
+    ]
+    assert len(repeated_events) == len(mission_events)
 
 
 def test_recalculate_issue_area_records_trigger_metadata(score_session: Session) -> None:
