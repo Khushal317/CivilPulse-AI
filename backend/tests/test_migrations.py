@@ -45,6 +45,10 @@ def test_initial_migration_generates_postgresql_sql(
     assert "CREATE TABLE issues" in sql
     assert "duplicate_of_issue_id" in sql
     assert "ix_issues_duplicate_retention" in sql
+    assert "latitude" in sql
+    assert "longitude" in sql
+    assert "ck_issues_coordinates_complete" in sql
+    assert "ck_issue_drafts_coordinates_complete" in sql
     assert "CREATE TABLE missions" in sql
     assert "CREATE TABLE mission_actions" in sql
     assert "uq_mission_actions_issue_actor" in sql

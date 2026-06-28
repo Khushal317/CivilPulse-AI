@@ -16,7 +16,7 @@ from app.domain.enums import (
 from app.models.issue import Issue
 from app.models.issue_update import IssueUpdate
 from app.repositories.issues import IssueListRecord, IssueRepository
-from app.schemas.issues import IssueListQuery
+from app.schemas.issues import IssueListQuery, IssueMapQuery
 from app.services.issues import IssueService
 
 
@@ -36,6 +36,10 @@ class FakeIssueRepository(IssueRepository):
     def list_public(self, query: IssueListQuery) -> tuple[list[IssueListRecord], int]:
         del query
         return [IssueListRecord(issue=self.issue, verification_count=7)], 25
+
+    def list_public_map(self, query: IssueMapQuery) -> tuple[list[Issue], int]:
+        del query
+        return [self.issue], 3
 
     def get_public_detail(self, issue_id: UUID) -> Issue | None:
         return self.issue if issue_id == self.issue.id else None
@@ -113,6 +117,8 @@ def test_issue_service_builds_public_page_without_private_fields() -> None:
         suggested_next_action="Inspect the road.",
         location="Sector 12",
         landmark="City School",
+        latitude=26.9124,
+        longitude=75.7873,
         image_key="issues/one.jpg",
         image_mime="image/jpeg",
         status=IssueStatus.REPORTED,
@@ -133,8 +139,52 @@ def test_issue_service_builds_public_page_without_private_fields() -> None:
     assert page.total_items == 25
     assert page.total_pages == 3
     assert page.items[0].image_url == "/api/v1/media/issues/one.jpg"
+    assert page.items[0].latitude == 26.9124
+    assert page.items[0].longitude == 75.7873
     assert page.items[0].verification_count == 7
     assert "citizen_contact" not in page.items[0].model_dump()
+
+
+def test_issue_service_builds_public_map_markers() -> None:
+    created_at = datetime(2026, 6, 25, tzinfo=UTC)
+    issue = Issue(
+        id=UUID(int=1),
+        public_reference="CP-20260625-00000001",
+        title="Pothole near school",
+        original_description="Private original report description.",
+        ai_summary="A structured summary suitable for the public issue detail.",
+        category=IssueCategory.ROAD_DAMAGE,
+        severity=IssueSeverity.HIGH,
+        urgency_level=UrgencyLevel.URGENT,
+        urgency_reason="Children use this road.",
+        suggested_department="Public Works",
+        safety_risk="Riders may lose control.",
+        citizen_explanation="Review the report.",
+        suggested_next_action="Inspect the road.",
+        location="Sector 12",
+        landmark="City School",
+        latitude=26.9124,
+        longitude=75.7873,
+        image_key="issues/one.jpg",
+        image_mime="image/jpeg",
+        status=IssueStatus.REPORTED,
+        citizen_name="Private Name",
+        citizen_contact="private@example.com",
+        ai_model="test",
+        prompt_version="test",
+        created_at=created_at,
+        updated_at=created_at,
+    )
+
+    response = IssueService(FakeIssueRepository(issue), Settings()).list_public_map(
+        IssueMapQuery(),
+    )
+
+    assert response.total_items == 3
+    assert response.unmapped_items == 2
+    assert response.items[0].latitude == 26.9124
+    assert response.items[0].longitude == 75.7873
+    assert "citizen_contact" not in response.items[0].model_dump()
 
 
 def make_issue(*, status: IssueStatus = IssueStatus.REPORTED) -> Issue:
@@ -155,6 +205,8 @@ def make_issue(*, status: IssueStatus = IssueStatus.REPORTED) -> Issue:
         suggested_next_action="Arrange an on-site road inspection.",
         location="Sector 12",
         landmark="City School",
+        latitude=26.9124,
+        longitude=75.7873,
         image_key="issues/ten.jpg",
         image_mime="image/jpeg",
         status=status,
@@ -311,6 +363,8 @@ def test_rate_limit_and_public_detail_privacy() -> None:
 
     detail = service.get_public_detail(issue.id, "viewer")
     assert detail.updates[0].note == "Issue reported by a citizen."
+    assert detail.latitude == 26.9124
+    assert detail.longitude == 75.7873
     assert "citizen_name" not in detail.model_dump()
     assert "citizen_contact" not in detail.model_dump()
 

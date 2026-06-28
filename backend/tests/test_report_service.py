@@ -172,6 +172,8 @@ def report_input() -> ReportAnalysisInput:
         ),
         location="Sector 12",
         landmark="City Public School",
+        latitude=26.9124,
+        longitude=75.7873,
         citizen_name="Citizen",
         citizen_contact="private@example.com",
         urgency_note="Children cross here every morning.",
@@ -227,9 +229,26 @@ def test_analyze_edit_publish_and_repeat_are_idempotent(
     assert len(repository.issues) == 1
     issue = next(iter(repository.issues.values()))
     assert issue.citizen_contact == "private@example.com"
+    assert issue.latitude == 26.9124
+    assert issue.longitude == 75.7873
     assert issue.area is not None
     assert issue.area.name == "Sector 12"
     assert len(issue.updates) == 1
+
+
+def test_draft_response_exposes_coordinates(
+    report_input: ReportAnalysisInput,
+    image: ValidatedImage,
+) -> None:
+    service, _repository, _storage = build_service()
+
+    draft = service.analyze(report_input, image)
+    fetched = service.get_draft(draft.id)
+
+    assert draft.latitude == 26.9124
+    assert draft.longitude == 75.7873
+    assert fetched.latitude == 26.9124
+    assert fetched.longitude == 75.7873
 
 
 def test_publish_triggers_civic_genome_recalculation_once(

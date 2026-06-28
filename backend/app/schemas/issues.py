@@ -13,9 +13,10 @@ from app.domain.enums import (
     UrgencyLevel,
 )
 from app.schemas.common import APIModel
+from app.schemas.coordinates import OptionalCoordinates
 
 
-class IssueDraftCreate(APIModel):
+class IssueDraftCreate(OptionalCoordinates):
     original_description: str = Field(min_length=10, max_length=4_000)
     location: str = Field(min_length=2, max_length=255)
     landmark: str | None = Field(default=None, max_length=255)
@@ -25,7 +26,7 @@ class IssueDraftCreate(APIModel):
     image_key: str = Field(min_length=1, max_length=512)
 
 
-class ReportAnalysisInput(APIModel):
+class ReportAnalysisInput(OptionalCoordinates):
     original_description: str = Field(min_length=10, max_length=4_000)
     location: str = Field(min_length=2, max_length=255)
     landmark: str | None = Field(default=None, max_length=255)
@@ -70,17 +71,25 @@ class ReportDraftUpdate(APIModel):
     original_description: str | None = Field(default=None, min_length=10, max_length=4_000)
     location: str | None = Field(default=None, min_length=2, max_length=255)
     landmark: str | None = Field(default=None, max_length=255)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
 
     @model_validator(mode="after")
     def prevent_null_required_fields(self) -> "ReportDraftUpdate":
-        nullable_fields = {"landmark"}
+        nullable_fields = {"landmark", "latitude", "longitude"}
         for field_name in self.model_fields_set - nullable_fields:
             if getattr(self, field_name) is None:
                 raise ValueError(f"{field_name} cannot be null")
+        coordinate_fields = {"latitude", "longitude"}
+        provided_coordinates = self.model_fields_set & coordinate_fields
+        if provided_coordinates and provided_coordinates != coordinate_fields:
+            raise ValueError("latitude and longitude must be updated together")
+        if provided_coordinates and (self.latitude is None) != (self.longitude is None):
+            raise ValueError("latitude and longitude must be provided together")
         return self
 
 
-class ReportDraftResponse(AIAnalysis):
+class ReportDraftResponse(AIAnalysis, OptionalCoordinates):
     id: UUID
     original_description: str
     location: str
@@ -114,7 +123,7 @@ class CommunityCounts(APIModel):
     incorrect: int = Field(default=0, ge=0)
 
 
-class IssueListItem(APIModel):
+class IssueListItem(OptionalCoordinates):
     id: UUID
     public_reference: str
     title: str
@@ -139,12 +148,37 @@ class IssueListQuery(APIModel):
     sort: IssueSort = IssueSort.NEWEST
 
 
+class IssueMapQuery(APIModel):
+    category: IssueCategory | None = None
+    severity: IssueSeverity | None = None
+    status: IssueStatus | None = None
+    location: str | None = Field(default=None, max_length=255)
+
+
 class IssueListResponse(APIModel):
     items: list[IssueListItem]
     page: int = Field(ge=1)
     page_size: int = Field(ge=1, le=50)
     total_items: int = Field(ge=0)
     total_pages: int = Field(ge=0)
+
+
+class IssueMapItem(OptionalCoordinates):
+    id: UUID
+    public_reference: str
+    title: str
+    category: IssueCategory
+    severity: IssueSeverity
+    status: IssueStatus
+    location: str
+    landmark: str | None
+    neighborhood: str | None = None
+
+
+class IssueMapResponse(APIModel):
+    items: list[IssueMapItem]
+    total_items: int = Field(ge=0)
+    unmapped_items: int = Field(default=0, ge=0)
 
 
 class IssueDuplicateReference(APIModel):

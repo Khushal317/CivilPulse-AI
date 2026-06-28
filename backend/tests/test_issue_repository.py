@@ -18,7 +18,7 @@ from app.domain.enums import (
 from app.models.community_action import CommunityAction
 from app.models.issue import Issue
 from app.repositories.issues import SQLAlchemyIssueRepository
-from app.schemas.issues import IssueListQuery
+from app.schemas.issues import IssueListQuery, IssueMapQuery
 
 
 def make_issue(
@@ -28,6 +28,8 @@ def make_issue(
     severity: IssueSeverity = IssueSeverity.MEDIUM,
     status: IssueStatus = IssueStatus.REPORTED,
     location: str = "Sector 12",
+    latitude: float | None = None,
+    longitude: float | None = None,
     created_offset: int = 0,
 ) -> Issue:
     created_at = datetime(2026, 6, 25, 10, tzinfo=UTC) + timedelta(minutes=created_offset)
@@ -47,6 +49,8 @@ def make_issue(
         suggested_next_action="Verify the issue and arrange an inspection.",
         location=location,
         landmark=None,
+        latitude=latitude,
+        longitude=longitude,
         image_key=f"issues/{number}.jpg",
         image_mime="image/jpeg",
         status=status,
@@ -188,3 +192,37 @@ def test_duplicate_issues_are_redirect_details_not_tracker_items(
     tracker_session.expire_all()
 
     assert repository.get_public_detail(recent_duplicate.id) is None
+
+
+def test_public_map_lists_only_coordinate_ready_tracker_issues(
+    tracker_session: Session,
+) -> None:
+    mappable = make_issue(
+        30,
+        category=IssueCategory.STREETLIGHT,
+        location="Green Park",
+        latitude=26.9124,
+        longitude=75.7873,
+    )
+    unmapped = make_issue(
+        31,
+        category=IssueCategory.STREETLIGHT,
+        location="Green Park",
+    )
+    duplicate = make_issue(
+        32,
+        category=IssueCategory.STREETLIGHT,
+        status=IssueStatus.DUPLICATE,
+        location="Green Park",
+        latitude=26.913,
+        longitude=75.788,
+    )
+    tracker_session.add_all([mappable, unmapped, duplicate])
+    tracker_session.commit()
+
+    records, total = SQLAlchemyIssueRepository(tracker_session).list_public_map(
+        IssueMapQuery(category=IssueCategory.STREETLIGHT, location="green park"),
+    )
+
+    assert total == 2
+    assert [issue.id for issue in records] == [mappable.id]

@@ -20,6 +20,9 @@ from app.schemas.issues import (
     IssueListItem,
     IssueListQuery,
     IssueListResponse,
+    IssueMapItem,
+    IssueMapQuery,
+    IssueMapResponse,
     IssuePublicDetail,
     IssueUpdatePublic,
 )
@@ -52,6 +55,33 @@ class FakeIssueService:
             page_size=query.page_size,
             total_items=1,
             total_pages=1,
+        )
+
+    def list_public_map(self, query: IssueMapQuery) -> IssueMapResponse:
+        self.query = IssueListQuery(
+            category=query.category,
+            severity=query.severity,
+            status=query.status,
+            location=query.location,
+        )
+        return IssueMapResponse(
+            items=[
+                IssueMapItem(
+                    id=UUID(int=1),
+                    public_reference="CP-20260625-00000001",
+                    title="Unsafe streetlight",
+                    category=IssueCategory.STREETLIGHT,
+                    severity=IssueSeverity.HIGH,
+                    location="Green Park",
+                    landmark=None,
+                    latitude=26.9124,
+                    longitude=75.7873,
+                    neighborhood="Green Park",
+                    status=IssueStatus.IN_PROGRESS,
+                ),
+            ],
+            total_items=2,
+            unmapped_items=1,
         )
 
     def get_public_detail(self, issue_id: UUID, actor_hash: str) -> IssuePublicDetail:
@@ -148,6 +178,33 @@ def test_tracker_route_enforces_page_size_limit(client: TestClient) -> None:
 
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "validation_error"
+
+
+def test_public_map_route_returns_marker_data(client: TestClient) -> None:
+    service = FakeIssueService()
+    app.dependency_overrides[get_issue_service] = lambda: service
+
+    response = client.get(
+        "/api/v1/issues/map",
+        params={
+            "category": "streetlight",
+            "severity": "high",
+            "status": "in_progress",
+            "location": "Green Park",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["latitude"] == 26.9124
+    assert response.json()["items"][0]["longitude"] == 75.7873
+    assert response.json()["items"][0]["neighborhood"] == "Green Park"
+    assert response.json()["unmapped_items"] == 1
+    assert service.query == IssueListQuery(
+        category=IssueCategory.STREETLIGHT,
+        severity=IssueSeverity.HIGH,
+        status=IssueStatus.IN_PROGRESS,
+        location="Green Park",
+    )
 
 
 def test_public_detail_sets_signed_actor_cookie_and_returns_timeline(

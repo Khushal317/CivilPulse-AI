@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, Text
+from sqlalchemy import CheckConstraint, DateTime, Float, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
@@ -11,12 +11,29 @@ from app.models.types import enum_type
 
 class IssueDraft(TimestampMixin, Base):
     __tablename__ = "issue_drafts"
-    __table_args__ = (Index("ix_issue_drafts_expires_unpublished", "expires_at", "published_at"),)
+    __table_args__ = (
+        CheckConstraint(
+            "latitude IS NULL OR (latitude >= -90 AND latitude <= 90)",
+            name="latitude_range",
+        ),
+        CheckConstraint(
+            "longitude IS NULL OR (longitude >= -180 AND longitude <= 180)",
+            name="longitude_range",
+        ),
+        CheckConstraint(
+            "(latitude IS NULL AND longitude IS NULL) OR "
+            "(latitude IS NOT NULL AND longitude IS NOT NULL)",
+            name="coordinates_complete",
+        ),
+        Index("ix_issue_drafts_expires_unpublished", "expires_at", "published_at"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     original_description: Mapped[str] = mapped_column(Text, nullable=False)
     location: Mapped[str] = mapped_column(String(255), nullable=False)
     landmark: Mapped[str | None] = mapped_column(String(255))
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
     citizen_name: Mapped[str | None] = mapped_column(String(120))
     citizen_contact: Mapped[str | None] = mapped_column(String(255))
     urgency_note: Mapped[str | None] = mapped_column(Text)

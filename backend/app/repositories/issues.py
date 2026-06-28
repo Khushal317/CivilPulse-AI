@@ -13,7 +13,7 @@ from app.domain.issue_duplicates import DUPLICATE_PUBLIC_RETENTION, now_utc
 from app.models.community_action import CommunityAction
 from app.models.issue import Issue
 from app.models.issue_update import IssueUpdate
-from app.schemas.issues import IssueListQuery
+from app.schemas.issues import IssueListQuery, IssueMapQuery
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +28,8 @@ class IssueRepository(Protocol):
     def add(self, issue: Issue) -> Issue: ...
 
     def list_public(self, query: IssueListQuery) -> tuple[list[IssueListRecord], int]: ...
+
+    def list_public_map(self, query: IssueMapQuery) -> tuple[list[Issue], int]: ...
 
     def get_public_detail(self, issue_id: UUID) -> Issue | None: ...
 
@@ -51,7 +53,7 @@ class IssueRepository(Protocol):
     def flush(self) -> None: ...
 
 
-def _filtered_issue_ids(query: IssueListQuery) -> Select[tuple[UUID]]:
+def _filtered_issue_ids(query: IssueListQuery | IssueMapQuery) -> Select[tuple[UUID]]:
     statement = select(Issue.id).where(Issue.status != IssueStatus.DUPLICATE)
     if query.category is not None:
         statement = statement.where(Issue.category == query.category)
@@ -136,6 +138,18 @@ class SQLAlchemyIssueRepository:
             for issue, verification_count in self._session.execute(statement).all()
         ]
         return records, total
+
+    def list_public_map(self, query: IssueMapQuery) -> tuple[list[Issue], int]:
+        filtered_ids = _filtered_issue_ids(query).subquery()
+        total = self._session.scalar(select(func.count()).select_from(filtered_ids)) or 0
+        statement = (
+            select(Issue)
+            .join(filtered_ids, filtered_ids.c.id == Issue.id)
+            .where(Issue.latitude.is_not(None), Issue.longitude.is_not(None))
+            .options(selectinload(Issue.area))
+            .order_by(Issue.created_at.desc(), Issue.id.desc())
+        )
+        return list(self._session.scalars(statement).all()), total
 
     def get_public_detail(self, issue_id: UUID) -> Issue | None:
         original_issue = aliased(Issue)

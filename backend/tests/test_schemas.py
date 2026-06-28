@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.domain.enums import IssueCategory, IssueSeverity, IssueStatus
+from app.schemas.coordinates import Coordinates
 from app.schemas.issues import AIAnalysis, IssueAdminDetail, IssueListItem, IssuePublicDetail
 
 
@@ -55,3 +56,21 @@ def test_issue_list_item_validates_domain_values() -> None:
 
     assert item.category is IssueCategory.ROAD_DAMAGE
     assert item.status is IssueStatus.REPORTED
+
+
+def test_coordinates_accept_complete_optional_pair() -> None:
+    assert Coordinates().latitude is None
+    assert Coordinates(latitude=26.9124, longitude=75.7873).longitude == 75.7873
+
+
+def test_coordinates_reject_out_of_range_values() -> None:
+    with pytest.raises(ValidationError):
+        Coordinates(latitude=91, longitude=75.7873)
+
+    with pytest.raises(ValidationError):
+        Coordinates(latitude=26.9124, longitude=-181)
+
+
+def test_coordinates_reject_half_coordinate_pair() -> None:
+    with pytest.raises(ValidationError):
+        Coordinates(latitude=26.9124)

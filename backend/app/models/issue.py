@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, Text
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin
@@ -18,6 +18,19 @@ if TYPE_CHECKING:
 class Issue(TimestampMixin, Base):
     __tablename__ = "issues"
     __table_args__ = (
+        CheckConstraint(
+            "latitude IS NULL OR (latitude >= -90 AND latitude <= 90)",
+            name="latitude_range",
+        ),
+        CheckConstraint(
+            "longitude IS NULL OR (longitude >= -180 AND longitude <= 180)",
+            name="longitude_range",
+        ),
+        CheckConstraint(
+            "(latitude IS NULL AND longitude IS NULL) OR "
+            "(latitude IS NOT NULL AND longitude IS NOT NULL)",
+            name="coordinates_complete",
+        ),
         Index("ix_issues_tracker_newest", "status", "created_at"),
         Index("ix_issues_category_severity", "category", "severity"),
         Index("ix_issues_location_search", "location"),
@@ -51,6 +64,8 @@ class Issue(TimestampMixin, Base):
     suggested_next_action: Mapped[str] = mapped_column(Text, nullable=False)
     location: Mapped[str] = mapped_column(String(255), nullable=False)
     landmark: Mapped[str | None] = mapped_column(String(255))
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
     image_key: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
     image_mime: Mapped[str] = mapped_column(String(50), nullable=False)
     status: Mapped[IssueStatus] = mapped_column(

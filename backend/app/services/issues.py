@@ -16,6 +16,9 @@ from app.schemas.issues import (
     IssueListItem,
     IssueListQuery,
     IssueListResponse,
+    IssueMapItem,
+    IssueMapQuery,
+    IssueMapResponse,
     IssuePublicDetail,
     IssueUpdatePublic,
 )
@@ -64,6 +67,8 @@ class IssueService:
                     severity=record.issue.severity,
                     location=record.issue.location,
                     landmark=record.issue.landmark,
+                    latitude=record.issue.latitude,
+                    longitude=record.issue.longitude,
                     image_url=image_url(record.issue.image_key),
                     status=record.issue.status,
                     created_at=record.issue.created_at,
@@ -76,6 +81,29 @@ class IssueService:
             page_size=query.page_size,
             total_items=total_items,
             total_pages=ceil(total_items / query.page_size) if total_items else 0,
+        )
+
+    def list_public_map(self, query: IssueMapQuery) -> IssueMapResponse:
+        issues, total_items = self.repository.list_public_map(query)
+        return IssueMapResponse(
+            items=[
+                IssueMapItem(
+                    id=issue.id,
+                    public_reference=issue.public_reference,
+                    title=issue.title,
+                    category=issue.category,
+                    severity=issue.severity,
+                    status=issue.status,
+                    location=issue.location,
+                    landmark=issue.landmark,
+                    latitude=issue.latitude,
+                    longitude=issue.longitude,
+                    neighborhood=issue.area.name if issue.area is not None else None,
+                )
+                for issue in issues
+            ],
+            total_items=total_items,
+            unmapped_items=total_items - len(issues),
         )
 
     def get_public_detail(self, issue_id: UUID, actor_hash: str) -> IssuePublicDetail:
@@ -204,6 +232,8 @@ class IssueService:
             suggested_next_action=issue.suggested_next_action,
             location=issue.location,
             landmark=issue.landmark,
+            latitude=issue.latitude,
+            longitude=issue.longitude,
             image_url=image_url(issue.image_key),
             status=issue.status,
             created_at=issue.created_at,

@@ -10,6 +10,8 @@ from app.schemas.issues import (
     CommunityActionResponse,
     IssueListQuery,
     IssueListResponse,
+    IssueMapQuery,
+    IssueMapResponse,
     IssuePublicDetail,
 )
 from app.services.anonymous_actor import (
@@ -57,6 +59,24 @@ def list_public_issues(
             status=status,
             location=location or None,
             sort=sort,
+        ),
+    )
+
+
+@router.get("/map", response_model=IssueMapResponse)
+def list_public_issue_markers(
+    service: IssueServiceDependency,
+    category: IssueCategory | None = None,
+    severity: IssueSeverity | None = None,
+    status: IssueStatus | None = None,
+    location: Annotated[str | None, Query(max_length=255)] = None,
+) -> IssueMapResponse:
+    return service.list_public_map(
+        IssueMapQuery(
+            category=category,
+            severity=severity,
+            status=status,
+            location=location or None,
         ),
     )
 

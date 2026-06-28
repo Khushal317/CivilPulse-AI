@@ -54,6 +54,8 @@ pnpm --dir frontend dev
 ```
 
 The frontend reads `VITE_API_BASE_URL` and defaults to `http://localhost:8000`.
+For the Map View enhancement, add `VITE_GOOGLE_MAPS_API_KEY` to `.env` with a
+Google Maps browser key that has Maps JavaScript API and Places API enabled.
 
 ## Database Migrations
 
@@ -115,6 +117,8 @@ make check
 - Never commit `.env`.
 - Browser-visible configuration must use the `VITE_` prefix.
 - Gemini credentials are backend-only.
+- Google Maps uses the browser-visible `VITE_GOOGLE_MAPS_API_KEY`; restrict it
+  by HTTP referrer in Google Cloud.
 - `.env.example` documents names and safe placeholders, not real credentials.
 
 ## Reporting Configuration
