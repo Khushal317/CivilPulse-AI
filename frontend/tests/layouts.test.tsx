@@ -153,9 +153,9 @@ describe("application route shells", () => {
     ],
     ["/report", "Report a local issue", "Primary navigation"],
     ["/issues", "Public issue tracker", "Primary navigation"],
-    ["/neighborhoods", "Civic Genome profiles for every area", "Primary navigation"],
+    ["/neighborhoods", "Every neighborhood has a civic character", "Primary navigation"],
     ["/neighborhoods/civicpulse-city-sector-12", "Sector 12", "Primary navigation"],
-    ["/rankings", "Positive Civic Genome rankings", "Primary navigation"],
+    ["/rankings", "Neighborhood leaderboard for civic progress", "Primary navigation"],
     ["/missions", "Useful missions for local civic progress", "Primary navigation"],
     [
       "/missions/22222222-2222-4222-8222-222222222222",

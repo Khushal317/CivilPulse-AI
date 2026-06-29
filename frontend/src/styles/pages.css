@@ -901,6 +901,12 @@
   flex: 0 0 auto;
 }
 
+.tracker-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
 .tracker-controls {
   display: grid;
   gap: var(--space-6);
@@ -1209,6 +1215,30 @@
   line-height: 1.5;
 }
 
+.issue-card-signal {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid rgb(23 100 60 / 14%);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(135deg, rgb(23 100 60 / 9%), transparent),
+    var(--color-surface-soft);
+}
+
+.issue-card-signal strong {
+  color: var(--color-brand);
+  font-size: var(--font-size-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.issue-card-signal span {
+  color: var(--color-ink);
+  font-weight: 760;
+  line-height: 1.4;
+}
+
 .issue-card-meta {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1287,6 +1317,12 @@
   font-size: clamp(2.35rem, 5vw, 4.25rem);
 }
 
+.issue-detail-signal-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
 .issue-detail-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.55fr) minmax(310px, 0.75fr);
@@ -1326,6 +1362,17 @@
   white-space: pre-wrap;
 }
 
+.detail-section-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.detail-section-heading .gemini-label {
+  flex: 0 0 auto;
+}
+
 .detail-facts {
   display: grid;
   gap: 0;
@@ -1354,6 +1401,13 @@
   margin: var(--space-3) 0 var(--space-5);
   color: var(--color-muted);
   line-height: 1.6;
+}
+
+.issue-next-step-card {
+  border-color: rgb(23 100 60 / 16%);
+  background:
+    radial-gradient(circle at top right, rgb(23 100 60 / 10%), transparent 12rem),
+    var(--color-surface);
 }
 
 .community-actions {
@@ -1442,6 +1496,20 @@
   display: grid;
   gap: var(--space-5);
   min-width: 0;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top right, rgb(23 100 60 / 8%), transparent 13rem),
+    var(--color-surface);
+  transition:
+    transform var(--transition-fast),
+    box-shadow var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.area-card:hover {
+  border-color: rgb(23 100 60 / 24%);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
 }
 
 .area-card-heading {
@@ -1465,7 +1533,7 @@
   border-radius: 999px;
   background:
     radial-gradient(circle at center, var(--color-surface) 58%, transparent 59%),
-    conic-gradient(var(--color-brand) 70%, var(--color-brand-soft) 0);
+    conic-gradient(var(--color-brand) var(--area-score, 70%), var(--color-brand-soft) 0);
   color: var(--color-brand);
   line-height: 1;
 }
@@ -1525,6 +1593,15 @@
   background: var(--color-surface-soft);
 }
 
+.area-card-score-stack {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid rgb(23 100 60 / 10%);
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / 54%);
+}
+
 .area-card-stats {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1542,6 +1619,13 @@
 .area-card-stats strong {
   color: var(--color-text);
   font-size: var(--font-size-xl);
+}
+
+.area-achievement-row,
+.ranking-signal-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .area-card-link {
@@ -1621,20 +1705,24 @@
   gap: var(--space-2);
 }
 
-.area-detail-score-card span {
+.area-detail-score-card .score-meter {
+  align-self: start;
+}
+
+.area-detail-score-card > span {
   color: var(--color-muted);
   font-size: var(--font-size-sm);
   font-weight: 760;
   text-transform: capitalize;
 }
 
-.area-detail-score-card strong {
+.area-detail-score-card > strong {
   color: var(--color-brand);
   font-size: clamp(2rem, 5vw, 3rem);
   line-height: 1;
 }
 
-.area-detail-score-card p {
+.area-detail-score-card > p {
   margin: 0;
   color: var(--color-muted);
   line-height: 1.55;
@@ -1643,6 +1731,13 @@
 .area-community-score-card {
   border-color: rgb(23 100 60 / 0.24);
   background: linear-gradient(135deg, rgb(23 100 60 / 0.08), var(--color-surface));
+}
+
+.area-insight-card {
+  border-color: rgb(109 75 216 / 18%);
+  background:
+    radial-gradient(circle at top right, rgb(109 75 216 / 10%), transparent 16rem),
+    var(--color-surface);
 }
 
 .area-detail-grid {
@@ -1712,6 +1807,7 @@
 }
 
 .area-issue-list,
+.area-improvement-list,
 .ranking-list {
   display: grid;
   gap: var(--space-3);
@@ -1721,6 +1817,7 @@
 }
 
 .area-issue-list li,
+.area-improvement-list li,
 .ranking-list li {
   display: grid;
   gap: var(--space-3);
@@ -1744,15 +1841,27 @@
 }
 
 .area-issue-list span,
+.area-improvement-list p,
 .ranking-main span,
 .ranking-panel-heading p {
   color: var(--color-muted);
   font-size: var(--font-size-sm);
 }
 
+.area-improvement-list p {
+  margin: 0;
+  line-height: 1.55;
+}
+
 .rankings-layout {
   display: grid;
   gap: var(--space-7);
+}
+
+.ranking-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-4);
 }
 
 .ranking-tabs {
@@ -1795,19 +1904,19 @@
 }
 
 .ranking-position {
-  display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
+  display: inline-grid;
+  min-width: 3.2rem;
+  min-height: 3.2rem;
   place-items: center;
-  border-radius: var(--radius-pill);
-  background: var(--color-brand);
-  color: white;
-  font-weight: 850;
+  border-radius: var(--radius-md);
+  color: var(--color-brand);
+  background: var(--color-brand-soft);
+  font-weight: 900;
 }
 
 .ranking-main {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-2);
 }
 
 .mission-layout,
@@ -2391,6 +2500,7 @@
   .area-genome-summary-grid,
   .area-detail-score-grid,
   .area-detail-grid,
+  .ranking-summary-grid,
   .mission-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2471,6 +2581,7 @@
   .review-heading,
   .review-heading-labels,
   .review-card-kicker,
+  .detail-section-heading,
   .issue-detail-heading,
   .tracker-heading,
   .tracker-filter-heading,
@@ -2520,6 +2631,7 @@
   .area-genome-summary-grid,
   .area-detail-score-grid,
   .area-detail-grid,
+  .ranking-summary-grid,
   .mission-grid,
   .operations-summary-card,
   .operations-report-grid,
@@ -2542,8 +2654,10 @@
 
   .tracker-search,
   .tracker-filter-grid,
+  .tracker-signal-grid,
   .tracker-map-fallback,
   .issue-grid,
+  .issue-detail-signal-grid,
   .issue-detail-grid {
     grid-template-columns: 1fr;
   }
@@ -2606,6 +2720,11 @@
 }
 
 @media (min-width: 761px) and (max-width: 1050px) {
+  .tracker-signal-grid,
+  .issue-detail-signal-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .tracker-filter-grid,
   .issue-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

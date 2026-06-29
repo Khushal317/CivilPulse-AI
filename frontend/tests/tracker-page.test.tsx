@@ -100,6 +100,9 @@ describe("public tracker", () => {
     renderTracker("/issues?category=streetlight&status=in_progress&sort=most_verified");
 
     expect(await screen.findByText("Broken streetlight near community park")).toBeInTheDocument();
+    expect(screen.getByText("Live tracker")).toBeInTheDocument();
+    expect(screen.getByText("Visible Signals")).toBeInTheDocument();
+    expect(screen.getByText("Public signal")).toBeInTheDocument();
     expect(screen.getByText("Green Park · Community playground")).toBeInTheDocument();
     expect(screen.getByText("CP-20260625-00000001")).toBeInTheDocument();
     expect(screen.getByText("4")).toBeInTheDocument();

@@ -6,12 +6,18 @@ import { Spinner } from "../../components/feedback/Loading";
 import { Seo } from "../../components/Seo";
 import { buttonClassName } from "../../components/ui/buttonStyles";
 import { Card } from "../../components/ui/Card";
+import { CivicStatCard } from "../../components/ui/CivicStatCard";
+import { GeminiLabel } from "../../components/ui/GeminiLabel";
+import { ScoreMeter } from "../../components/ui/ScoreMeter";
+import { TrendPill } from "../../components/ui/TrendPill";
 import { getArea } from "./api";
 import { AreaScoreBadge } from "./AreaScoreBadge";
 import { statusLabel } from "./areaLabels";
 import type { AreaDetail, AreaInsight, AreaScoreBreakdown } from "./types";
 
-const scoreLabels: Array<keyof AreaScoreBreakdown> = [
+type CivicHealthCategoryKey = Exclude<keyof AreaScoreBreakdown, "overall" | "participation">;
+
+const scoreLabels: CivicHealthCategoryKey[] = [
   "infrastructure",
   "cleanliness",
   "safety",
@@ -27,6 +33,17 @@ const scoreDescriptions: Record<keyof AreaScoreBreakdown, string> = {
   participation: "Useful citizen verification, unresolved, and fixed-confirmation activity.",
   responsiveness: "How quickly serious and older issues move toward resolution.",
   environment: "Water leakage, drainage, sewage, waste, and environmental issue patterns.",
+};
+
+const scoreTones: Record<
+  CivicHealthCategoryKey,
+  "cleanliness" | "environment" | "infrastructure" | "responsiveness" | "safety"
+> = {
+  infrastructure: "infrastructure",
+  cleanliness: "cleanliness",
+  safety: "safety",
+  responsiveness: "responsiveness",
+  environment: "environment",
 };
 
 const eventLabels: Record<string, string> = {
@@ -78,23 +95,34 @@ function safeInsight(area: AreaDetail): AreaInsight {
   );
 }
 
+function isGeminiInsight(insight: AreaInsight) {
+  return insight.model_used.toLowerCase().includes("gemini");
+}
+
+function positiveScoreEvents(area: AreaDetail) {
+  return area.recent_score_events.filter((event) => event.score_change > 0).slice(0, 3);
+}
+
 function ScoreGrid({ area }: { area: AreaDetail }) {
   return (
     <div className="area-detail-score-grid">
       {scoreLabels.map((key) => (
         <Card as="article" className="area-detail-score-card" key={key}>
-          <span>{key.replace("_", " ")}</span>
-          <strong>{area.scores[key]}</strong>
-          <p>{scoreDescriptions[key]}</p>
+          <ScoreMeter
+            helper={scoreDescriptions[key]}
+            label={titleLabel(key)}
+            tone={scoreTones[key]}
+            value={area.scores[key]}
+          />
         </Card>
       ))}
       <Card as="article" className="area-detail-score-card area-community-score-card">
-        <span>community power</span>
-        <strong>{area.civic_genome.community_power_score}</strong>
-        <p>
-          Resident verification, unresolved/fixed confirmations, mission participation,
-          and volunteer action signals.
-        </p>
+        <ScoreMeter
+          helper="Resident verification, unresolved/fixed confirmations, mission participation, and volunteer action signals."
+          label="Community Power"
+          tone="community-power"
+          value={area.civic_genome.community_power_score}
+        />
       </Card>
     </div>
   );
@@ -142,6 +170,7 @@ export function AreaDetailPage() {
 
   const data = area.data;
   const insight = safeInsight(data);
+  const improvements = positiveScoreEvents(data);
 
   return (
     <section className="page-section area-detail-page">
@@ -159,8 +188,8 @@ export function AreaDetailPage() {
             <p className="eyebrow">{data.city} Civic Genome</p>
             <h1>{data.name}</h1>
             <p className="page-copy">
-              This profile explains what is shaping the area right now: public issues,
-              community actions, admin updates, and completed mission rewards.
+              A transparent civic profile showing where the area is healthy, where
+              problems remain, and how residents are helping move the score.
             </p>
             <div className="area-card-meta">
               <span>{data.rank ? `Rank #${data.rank}` : "New area"}</span>
@@ -172,27 +201,27 @@ export function AreaDetailPage() {
         </header>
 
         <div className="area-genome-summary-grid">
-          <Card padding="large">
-            <p className="eyebrow">Civic Health Score</p>
-            <strong>{data.civic_genome.civic_health_score}/100</strong>
-            <p>
-              Overall area condition from infrastructure, cleanliness, safety,
-              environment, and responsiveness.
-            </p>
-          </Card>
-          <Card padding="large">
-            <p className="eyebrow">Community Power Score</p>
-            <strong>{data.civic_genome.community_power_score}/100</strong>
-            <p>
-              How active and helpful residents are through verifications, missions,
-              and useful public signals.
-            </p>
-          </Card>
-          <Card padding="large">
-            <p className="eyebrow">Confidence</p>
-            <strong>{confidenceLabel(data.civic_genome.confidence_level)}</strong>
-            <p>{data.civic_genome.confidence_reason}</p>
-          </Card>
+          <CivicStatCard
+            description="Overall area condition from infrastructure, cleanliness, safety, environment, and responsiveness."
+            eyebrow="Civic Health Score"
+            icon="🏙️"
+            tone="brand"
+            value={`${data.civic_genome.civic_health_score}/100`}
+          />
+          <CivicStatCard
+            description="Resident activity through verifications, missions, and useful public signals."
+            eyebrow="Community Power Score"
+            icon="🤝"
+            tone="success"
+            value={`${data.civic_genome.community_power_score}/100`}
+          />
+          <CivicStatCard
+            description={data.civic_genome.confidence_reason}
+            eyebrow="Confidence"
+            icon="◎"
+            tone={data.civic_genome.confidence_level === "high" ? "success" : data.civic_genome.confidence_level === "low" ? "warning" : "ai"}
+            value={confidenceLabel(data.civic_genome.confidence_level)}
+          />
         </div>
 
         {data.civic_genome.score_limit_reasons.length ? (
@@ -208,9 +237,16 @@ export function AreaDetailPage() {
 
         <ScoreGrid area={data} />
 
-        <Card padding="large">
-          <p className="eyebrow">Civic explanation</p>
-          <h2>What this Civic Genome means</h2>
+        <Card className="area-insight-card" padding="large">
+          <div className="detail-section-heading">
+            <div>
+              <p className="eyebrow">Civic explanation</p>
+              <h2>What this Civic Genome means</h2>
+            </div>
+            <GeminiLabel>
+              {isGeminiInsight(insight) ? "Generated by Gemini" : "AI-assisted insight"}
+            </GeminiLabel>
+          </div>
           <p className="page-copy">{insight.explanation}</p>
           <dl className="operations-report-meta">
             <div>
@@ -303,15 +339,34 @@ export function AreaDetailPage() {
           </Card>
 
           <Card padding="large">
-            <p className="eyebrow">Community missions</p>
-            <h2>Active missions</h2>
-            <p className="admin-muted">
-              {data.active_missions > 0
-                ? `${data.active_missions} active mission${
-                    data.active_missions === 1 ? " is" : "s are"
-                  } connected to this area.`
-                : "No active missions are connected to this area right now. Admin-approved missions will appear here when available."}
-            </p>
+            <p className="eyebrow">Recent improvements</p>
+            <h2>What is getting better?</h2>
+            {improvements.length ? (
+              <ul className="area-improvement-list">
+                {improvements.map((event) => (
+                  <li key={event.id}>
+                    <TrendPill direction="up">
+                      {scoreEventLabel(event.score_key)} +{event.score_change}
+                    </TrendPill>
+                    <p>{event.reason}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="admin-muted">
+                {data.resolved_this_week > 0
+                  ? `${data.resolved_this_week} issue${
+                      data.resolved_this_week === 1 ? " was" : "s were"
+                    } resolved this week. Positive score events will appear here as they are recorded.`
+                  : "No recent improvement events are attached to this area yet. Resolved issues and completed missions will make this section come alive."}
+              </p>
+            )}
+            <div className="area-card-meta">
+              <span>
+                {data.active_missions} active mission{data.active_missions === 1 ? "" : "s"}
+              </span>
+              <span>{data.resolved_this_week} resolved this week</span>
+            </div>
             <Link className="area-card-link" to="/missions">
               Browse community missions
             </Link>

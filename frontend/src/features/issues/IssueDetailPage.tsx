@@ -9,6 +9,8 @@ import { CategoryBadge, SeverityBadge, StatusBadge } from "../../components/ui/B
 import { Button } from "../../components/ui/Button";
 import { buttonClassName } from "../../components/ui/buttonStyles";
 import { Card } from "../../components/ui/Card";
+import { CivicStatCard } from "../../components/ui/CivicStatCard";
+import { GeminiLabel } from "../../components/ui/GeminiLabel";
 import { Timeline } from "../../components/ui/Timeline";
 import type { CommunityActionType, IssueStatus } from "../../types/domain";
 import { getPublicIssue, publicIssueImageUrl, submitCommunityAction } from "./api";
@@ -53,6 +55,22 @@ const actionContent: Record<
 
 function actionCount(issue: PublicIssueDetail, actionType: CommunityActionType): number {
   return issue.community_counts[actionType];
+}
+
+function nextStepForIssue(issue: PublicIssueDetail): string {
+  if (issue.status === "duplicate" && issue.duplicate_of) {
+    return `Follow the original report ${issue.duplicate_of.public_reference} for updates so the community signal stays focused in one place.`;
+  }
+  if (issue.status === "rejected") {
+    return "This report is closed as rejected. If the problem still exists, submit a clearer report with a current photo and precise location.";
+  }
+  if (issue.status === "resolved") {
+    return "Review the timeline and use the fixed signal only if you can confirm the location is now safe.";
+  }
+  if (issue.community_counts.still_unresolved > 0) {
+    return "If you are nearby, add a safe community signal to confirm whether this problem is still unresolved.";
+  }
+  return "If you recognize this location, add a safe verification signal or share the issue with nearby residents.";
 }
 
 export function IssueDetailPage() {
@@ -177,6 +195,30 @@ export function IssueDetailPage() {
           </div>
         </header>
 
+        <div className="issue-detail-signal-grid" aria-label="Issue signal summary">
+          <CivicStatCard
+            description="Current public workflow state for this report."
+            eyebrow="Current Status"
+            icon="●"
+            tone={issue.status === "resolved" ? "success" : issue.status === "rejected" ? "danger" : "brand"}
+            value={statusLabels[issue.status]}
+          />
+          <CivicStatCard
+            description="Resident confirmations attached to this issue."
+            eyebrow="Community Confirmations"
+            icon="👥"
+            tone={issue.verification_count > 0 ? "success" : "neutral"}
+            value={issue.verification_count}
+          />
+          <CivicStatCard
+            description="Latest known public activity on this report."
+            eyebrow="Last Updated"
+            icon="↻"
+            tone="ai"
+            value={dateFormatter.format(new Date(issue.updated_at))}
+          />
+        </div>
+
         <div className="issue-detail-grid">
           <main className="issue-detail-main">
             {isDuplicate && issue.duplicate_of ? (
@@ -210,8 +252,13 @@ export function IssueDetailPage() {
             </Card>
 
             <Card padding="large">
-              <p className="eyebrow">AI-structured complaint</p>
-              <h2>Public complaint summary</h2>
+              <div className="detail-section-heading">
+                <div>
+                  <p className="eyebrow">AI-structured complaint</p>
+                  <h2>Public complaint summary</h2>
+                </div>
+                <GeminiLabel />
+              </div>
               <p className="detail-copy">{issue.ai_summary}</p>
               <dl className="detail-facts">
                 <div>
@@ -249,6 +296,12 @@ export function IssueDetailPage() {
           </main>
 
           <aside className="issue-detail-sidebar">
+            <Card className="issue-next-step-card" padding="large">
+              <p className="eyebrow">Citizen next step</p>
+              <h2>What should I do next?</h2>
+              <p className="community-guidance">{nextStepForIssue(issue)}</p>
+            </Card>
+
             <Card padding="large">
               <p className="eyebrow">Community signals</p>
               <h2>What are residents seeing?</h2>

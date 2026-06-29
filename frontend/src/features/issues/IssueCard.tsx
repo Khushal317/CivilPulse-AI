@@ -35,6 +35,16 @@ export function IssueCard({ issue }: { issue: PublicIssueListItem }) {
             {issue.landmark ? ` · ${issue.landmark}` : ""}
           </p>
         </div>
+        <div className="issue-card-signal">
+          <strong>Public signal</strong>
+          <span>
+            {issue.verification_count > 0
+              ? `${issue.verification_count} community confirmation${
+                  issue.verification_count === 1 ? "" : "s"
+                }`
+              : "Waiting for community verification"}
+          </span>
+        </div>
         <dl className="issue-card-meta">
           <div>
             <dt>Community confirmations</dt>

@@ -9,6 +9,7 @@ import { Seo } from "../../components/Seo";
 import { Button } from "../../components/ui/Button";
 import { buttonClassName } from "../../components/ui/buttonStyles";
 import { Card } from "../../components/ui/Card";
+import { CivicStatCard } from "../../components/ui/CivicStatCard";
 import { SelectField, TextField } from "../../components/ui/FormField";
 import { getPublicIssueMap, getPublicIssues } from "./api";
 import {
@@ -126,11 +127,11 @@ export function TrackerPage() {
       <div className="container tracker-layout">
         <header className="tracker-heading">
           <div>
-            <p className="eyebrow">Public transparency</p>
+            <p className="eyebrow">Live tracker</p>
             <h1>Public issue tracker</h1>
             <p className="page-copy">
-              Explore reported civic problems, see what the community has confirmed, and follow
-              issues as their status changes.
+              A living feed of reported civic problems, community confirmations, and status
+              changes. Every public issue is a signal that can help a neighborhood evolve.
             </p>
           </div>
           <Link className={buttonClassName("primary")} to="/report">
@@ -138,11 +139,34 @@ export function TrackerPage() {
           </Link>
         </header>
 
+        <div className="tracker-signal-grid" aria-label="Tracker snapshot">
+          <CivicStatCard
+            description={view === "map" ? "Coordinate-ready reports in this view." : "Reports matching this view."}
+            eyebrow={view === "map" ? "Mappable Signals" : "Visible Signals"}
+            icon={view === "map" ? "🗺️" : "📡"}
+            value={typeof currentTotal === "number" ? currentTotal : "—"}
+          />
+          <CivicStatCard
+            description="Filters are shareable because they stay in the URL."
+            eyebrow="Active Filters"
+            icon="⌁"
+            tone={activeFilterCount > 0 ? "warning" : "neutral"}
+            value={activeFilterCount}
+          />
+          <CivicStatCard
+            description="Use List for detail, Map for location context."
+            eyebrow="Current View"
+            icon={view === "map" ? "📍" : "≡"}
+            tone="ai"
+            value={view === "map" ? "Map" : "List"}
+          />
+        </div>
+
         <Card as="aside" className="tracker-controls" padding="large">
           <div className="tracker-filter-heading">
             <div>
-              <h2>Find local issues</h2>
-              <p>Filters stay in the URL, so this exact view can be bookmarked or shared.</p>
+              <h2>Find local civic signals</h2>
+              <p>Filter the feed by category, severity, status, or neighborhood context.</p>
             </div>
             {activeFilterCount > 0 && (
               <Button
@@ -246,6 +270,9 @@ export function TrackerPage() {
               {typeof currentTotal === "number"
                 ? `${currentTotal} ${currentTotal === 1 ? "issue" : "issues"} found`
                 : "Loading current reports…"}
+              {view === "map" && mapResult && mapResult.unmapped_items > 0
+                ? ` · ${mapResult.unmapped_items} without coordinates`
+                : ""}
             </p>
           </div>
           {isUpdating && <span>Updating…</span>}

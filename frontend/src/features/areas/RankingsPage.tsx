@@ -7,6 +7,8 @@ import { ErrorState } from "../../components/feedback/ErrorState";
 import { Spinner } from "../../components/feedback/Loading";
 import { Seo } from "../../components/Seo";
 import { Card } from "../../components/ui/Card";
+import { CivicStatCard } from "../../components/ui/CivicStatCard";
+import { TrendPill } from "../../components/ui/TrendPill";
 import { getAreas } from "./api";
 import { AreaScoreBadge } from "./AreaScoreBadge";
 import { statusLabel } from "./areaLabels";
@@ -79,6 +81,7 @@ export function RankingsPage() {
     () => sortedAreas(areas.data?.items ?? [], activeKey),
     [activeKey, areas.data?.items],
   );
+  const leader = rankedAreas[0];
 
   return (
     <section className="page-section rankings-page">
@@ -90,10 +93,10 @@ export function RankingsPage() {
         <header className="arena-heading">
           <div>
             <p className="eyebrow">City Rankings</p>
-            <h1>Positive Civic Genome rankings</h1>
+            <h1>Neighborhood leaderboard for civic progress</h1>
             <p className="page-copy">
-              Compare neighborhoods by their strongest public civic signals. These
-              rankings are designed to highlight progress and guide community missions.
+              Compare neighborhoods by public Civic Genome signals. Rankings highlight
+              progress, participation, and where community missions can create the next lift.
             </p>
           </div>
         </header>
@@ -114,6 +117,29 @@ export function RankingsPage() {
         )}
         {areas.data && areas.data.items.length > 0 && (
           <>
+            <div className="ranking-summary-grid" aria-label="Ranking snapshot">
+              <CivicStatCard
+                description="Neighborhood profiles included in this leaderboard."
+                eyebrow="Tracked Areas"
+                icon="🏘️"
+                value={areas.data.items.length}
+              />
+              <CivicStatCard
+                description={leader ? `${leader.name} currently leads this category.` : "Leaders appear after data loads."}
+                eyebrow="Current Leader"
+                icon="🏆"
+                tone="success"
+                value={leader?.name ?? "—"}
+              />
+              <CivicStatCard
+                description="Switch tabs to compare different civic strengths."
+                eyebrow="Active Ranking"
+                icon="↕"
+                tone="ai"
+                value={activeTab.label}
+              />
+            </div>
+
             <div aria-label="Ranking categories" className="ranking-tabs" role="tablist">
               {rankingTabs.map((tab) => (
                 <button
@@ -147,6 +173,17 @@ export function RankingsPage() {
                         {statusLabel(area.status_label)} · {area.open_issues} open issues ·{" "}
                         {area.resolved_this_week} resolved this week
                       </span>
+                      <div className="ranking-signal-row">
+                        <TrendPill direction={index === 0 ? "up" : "flat"}>
+                          {index === 0 ? "Leading now" : `Rank ${index + 1}`}
+                        </TrendPill>
+                        <TrendPill direction={area.active_missions > 0 ? "up" : "flat"}>
+                          {area.active_missions} active mission{area.active_missions === 1 ? "" : "s"}
+                        </TrendPill>
+                        <TrendPill direction={area.civic_genome.confidence_level === "low" ? "flat" : "up"}>
+                          {area.civic_genome.confidence_level} confidence
+                        </TrendPill>
+                      </div>
                     </div>
                     <AreaScoreBadge score={scoreValue(area, activeKey)} />
                   </li>

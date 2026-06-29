@@ -124,13 +124,17 @@ describe("Neighborhood Arena", () => {
     renderArena();
 
     expect(await screen.findByRole("heading", { name: "Sector 12" })).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: "Every neighborhood has a civic character" }),
+    ).toBeInTheDocument();
     expect(screen.getByLabelText("Civic Health 70 out of 100")).toBeInTheDocument();
     expect(screen.getByText("Community Power")).toBeInTheDocument();
-    expect(screen.getByText("91/100")).toBeInTheDocument();
-    expect(screen.getByText("Confidence")).toBeInTheDocument();
-    expect(screen.getByText("Medium")).toBeInTheDocument();
+    expect(screen.getByRole("progressbar", { name: "Community Power" }))
+      .toHaveAttribute("aria-valuenow", "91");
+    expect(screen.getByText("Medium confidence")).toBeInTheDocument();
     expect(screen.getByText("Rank #1")).toBeInTheDocument();
     expect(screen.getByText("Improving")).toBeInTheDocument();
+    expect(screen.getByText("City leader")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View Civic Genome" }))
       .toHaveAttribute("href", "/neighborhoods/civicpulse-city-sector-12");
     expect(screen.getByText("Open issues")).toBeInTheDocument();
@@ -163,13 +167,14 @@ describe("Neighborhood Arena", () => {
     expect(screen.getByText("70 → 68")).toBeInTheDocument();
     expect(screen.getByText("5 total reports")).toBeInTheDocument();
     expect(screen.getByText("What this Civic Genome means")).toBeInTheDocument();
+    expect(screen.getByText("AI-assisted insight")).toBeInTheDocument();
     expect(screen.getByText(/residents are verifying issues/)).toBeInTheDocument();
     expect(screen.getByText("Verify safe public issues near you.")).toBeInTheDocument();
     expect(screen.getByText("Issues currently shaping this Civic Genome")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Damaged road near school gate" }))
       .toHaveAttribute("href", "/issues/33333333-3333-4333-8333-333333333333");
-    expect(screen.getByText(/No active missions are connected to this area right now/))
-      .toBeInTheDocument();
+    expect(screen.getByText("What is getting better?")).toBeInTheDocument();
+    expect(screen.getByText("0 active missions")).toBeInTheDocument();
   });
 
   it("renders city rankings and sorts by the active ranking tab", async () => {
@@ -188,8 +193,10 @@ describe("Neighborhood Arena", () => {
       </QueryClientProvider>,
     );
 
-    expect(await screen.findByRole("heading", { name: "Positive Civic Genome rankings" }))
+    expect(await screen.findByRole("heading", { name: "Neighborhood leaderboard for civic progress" }))
       .toBeInTheDocument();
+    expect(await screen.findByText("Tracked Areas")).toBeInTheDocument();
+    expect(screen.getByText("Current Leader")).toBeInTheDocument();
     expect(await screen.findByRole("heading", { name: "Civic Health leaders" }))
       .toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "Safety" }));
