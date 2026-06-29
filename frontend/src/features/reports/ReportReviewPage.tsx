@@ -15,6 +15,7 @@ import { buttonClassName } from "../../components/ui/buttonStyles";
 import { Card } from "../../components/ui/Card";
 import { Dialog } from "../../components/ui/Dialog";
 import { SelectField, TextAreaField, TextField } from "../../components/ui/FormField";
+import { GeminiLabel } from "../../components/ui/GeminiLabel";
 import { useNotifications } from "../../app/notificationContext";
 import {
   cancelReport,
@@ -172,7 +173,8 @@ export function ReportReviewPage() {
             <h1>Your issue is now trackable.</h1>
             <p className="page-copy">
               Public reference <strong>{published.public_reference}</strong> has been created with
-              Reported status.
+              Reported status. It can now collect community verification and contribute to local
+              Civic Genome signals.
             </p>
             <div className="review-badges">
               <StatusBadge status={published.status} />
@@ -201,11 +203,14 @@ export function ReportReviewPage() {
       <div className="container review-layout">
         <div className="review-heading">
           <div>
-            <p className="eyebrow">AI review</p>
+            <div className="review-heading-labels">
+              <p className="eyebrow">AI review</p>
+              <GeminiLabel />
+            </div>
             <h1>Review before publishing</h1>
             <p className="page-copy">
-              AI suggestions are not official government decisions. Correct anything unclear before
-              making the issue public.
+              Gemini organized this into a civic report draft. You stay in control: correct
+              anything unclear before making the issue public.
             </p>
           </div>
           <div className="review-badges">
@@ -220,6 +225,7 @@ export function ReportReviewPage() {
             <div>
               <strong>{draft.location}</strong>
               <span>{draft.landmark || "No landmark provided"}</span>
+              <small>Original citizen evidence</small>
             </div>
           </Card>
 
@@ -232,7 +238,10 @@ export function ReportReviewPage() {
             <Card padding="large">
               <div className="review-card-heading">
                 <div>
-                  <p className="eyebrow">Structured complaint</p>
+                  <div className="review-card-kicker">
+                    <p className="eyebrow">Structured complaint</p>
+                    <GeminiLabel>Gemini structured</GeminiLabel>
+                  </div>
                   <h2>Public report details</h2>
                 </div>
                 {!editing && (
@@ -314,6 +323,12 @@ export function ReportReviewPage() {
                 </div>
               ) : (
                 <div className="review-summary">
+                  <div className="review-control-note">
+                    <strong>Human review required.</strong>
+                    <span>
+                      This draft is private until you submit it. Edit anything that feels wrong.
+                    </span>
+                  </div>
                   <h3>{draft.title}</h3>
                   <p>{draft.ai_summary}</p>
                   <dl className="review-details">

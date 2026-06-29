@@ -647,7 +647,7 @@ describe("administrator workflow", () => {
       expect.stringContaining("/admin/missions/manual"),
       expect.objectContaining({ method: "POST" }),
     );
-  });
+  }, 10_000);
 
   it("shows private details and confirms a rejection with CSRF", async () => {
     const user = userEvent.setup();

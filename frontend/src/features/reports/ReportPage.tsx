@@ -10,6 +10,7 @@ import { Seo } from "../../components/Seo";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
 import { SelectField, TextAreaField, TextField } from "../../components/ui/FormField";
+import { GeminiLabel } from "../../components/ui/GeminiLabel";
 import { analyzeReport } from "./api";
 import { categoryOptions } from "./constants";
 import { ImageUploadField } from "./ImageUploadField";
@@ -76,13 +77,38 @@ export function ReportPage() {
         title="Report an issue"
       />
       <div className="container report-layout">
-        <div className="report-heading">
-          <p className="eyebrow">Citizen reporting</p>
-          <h1>Report a local issue</h1>
-          <p className="page-copy">
-            Add one clear photo and describe what you observed. CivicPulse AI will organize the
-            report for your review before anything becomes public.
-          </p>
+        <div className="report-heading report-heading-grid">
+          <div>
+            <p className="eyebrow">Start the evolution loop</p>
+            <h1>Report a local issue</h1>
+            <p className="page-copy">
+              Add one clear photo and describe what you observed. Gemini structures the civic
+              report, but nothing becomes public until you review and publish it.
+            </p>
+          </div>
+          <Card as="aside" className="report-ai-card" padding="large">
+            <GeminiLabel />
+            <h2>Your report becomes a public signal.</h2>
+            <p>
+              CivicPulse AI helps organize the issue into a title, category, severity, safety
+              risk, and next action so neighbors can understand and verify it faster.
+            </p>
+          </Card>
+        </div>
+
+        <div className="report-trust-grid" aria-label="Report safety promises">
+          <Card padding="medium">
+            <strong>1. Private draft first</strong>
+            <span>You review the AI result before anything appears publicly.</span>
+          </Card>
+          <Card padding="medium">
+            <strong>2. Manual location still works</strong>
+            <span>Google suggestions are helpful, not required.</span>
+          </Card>
+          <Card padding="medium">
+            <strong>3. Contact details stay private</strong>
+            <span>Optional contact information is excluded from Gemini prompts and public APIs.</span>
+          </Card>
         </div>
 
         <form
@@ -96,7 +122,7 @@ export function ReportPage() {
               <span>1</span>
               <div>
                 <h2>Issue evidence</h2>
-                <p>Use a recent photo that clearly shows the civic problem.</p>
+                <p>Use a recent photo that clearly shows the civic problem residents should see.</p>
               </div>
             </div>
             <div className="form-stack">
@@ -117,7 +143,7 @@ export function ReportPage() {
               <span>2</span>
               <div>
                 <h2>Location</h2>
-                <p>Give enough context for residents and civic teams to recognize the place.</p>
+                <p>Choose a suggestion when available, or type the location manually.</p>
               </div>
             </div>
             <div className="form-grid">
@@ -152,7 +178,7 @@ export function ReportPage() {
               <span>3</span>
               <div>
                 <h2>Helpful context</h2>
-                <p>These details are optional. AI will suggest a category and urgency.</p>
+                <p>These details are optional. Gemini will still suggest structure and urgency.</p>
               </div>
             </div>
             <div className="form-stack">
@@ -220,7 +246,7 @@ export function ReportPage() {
           <div className="form-submit-bar">
             <div>
               <strong>Nothing is published yet.</strong>
-              <span>You will review and edit the AI result on the next screen.</span>
+              <span>Next: review the Gemini-structured draft and decide what becomes public.</span>
             </div>
             <Button isLoading={analyze.isPending} type="submit">
               Analyze with AI

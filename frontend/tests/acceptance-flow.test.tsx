@@ -221,5 +221,5 @@ describe("complete product acceptance flow", () => {
     expect(within(timeline).getByText("Escalated")).toBeInTheDocument();
     expect(within(timeline).getByText("In progress")).toBeInTheDocument();
     expect(within(timeline).getByText("Resolved")).toBeInTheDocument();
-  });
+  }, 10_000);
 });

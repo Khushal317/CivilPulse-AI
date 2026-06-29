@@ -22,15 +22,16 @@ export function PublicLayout() {
           <div>
             <SiteBrand />
             <p>
-              Report local problems. Verify with your community. Track until resolved.
+              Level up your neighborhood with AI-assisted reports, community
+              verification, Civic Genome scores, and local missions.
             </p>
           </div>
           <nav aria-label="Footer navigation">
             <Link to="/report">Report an issue</Link>
-            <Link to="/issues">Public tracker</Link>
-            <Link to="/neighborhoods">Neighborhoods</Link>
+            <Link to="/issues">Live tracker</Link>
+            <Link to="/neighborhoods">Neighborhood Arena</Link>
             <Link to="/rankings">Rankings</Link>
-            <Link to="/missions">Missions</Link>
+            <Link to="/missions">Community Missions</Link>
             <Link to="/admin">Admin</Link>
           </nav>
           <p className="footer-disclaimer">

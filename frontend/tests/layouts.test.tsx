@@ -148,7 +148,7 @@ describe("application route shells", () => {
   it.each([
     [
       "/",
-      "Report local problems. Verify with your community. Track until resolved.",
+      "Your neighborhood is alive. Help it evolve.",
       "Primary navigation",
     ],
     ["/report", "Report a local issue", "Primary navigation"],
