@@ -21,6 +21,10 @@ export function analyzeReport(values: ReportFormValues): Promise<ReportDraft> {
   form.append("image", image);
   form.append("original_description", values.originalDescription);
   form.append("location", values.location);
+  if (typeof values.latitude === "number" && typeof values.longitude === "number") {
+    form.append("latitude", String(values.latitude));
+    form.append("longitude", String(values.longitude));
+  }
 
   const optionalValues = {
     landmark: values.landmark,

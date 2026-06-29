@@ -4,6 +4,7 @@ import type { CommunityActionType } from "../../types/domain";
 import type {
   CommunityActionResponse,
   IssueTrackerFilters,
+  PublicIssueMapResponse,
   PublicIssueDetail,
   PublicIssueListResponse,
 } from "./types";
@@ -23,6 +24,20 @@ export function getPublicIssues(
   if (filters.location) params.set("location", filters.location);
 
   return apiRequest<PublicIssueListResponse>(`/api/v1/issues?${params}`, { signal });
+}
+
+export function getPublicIssueMap(
+  filters: IssueTrackerFilters,
+  signal?: AbortSignal,
+): Promise<PublicIssueMapResponse> {
+  const params = new URLSearchParams();
+  if (filters.category) params.set("category", filters.category);
+  if (filters.severity) params.set("severity", filters.severity);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.location) params.set("location", filters.location);
+
+  const suffix = params.size > 0 ? `?${params}` : "";
+  return apiRequest<PublicIssueMapResponse>(`/api/v1/issues/map${suffix}`, { signal });
 }
 
 export function publicIssueImageUrl(path: string): string {

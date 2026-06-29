@@ -32,6 +32,8 @@ export interface PublicIssueListItem {
   severity: IssueSeverity;
   location: string;
   landmark: string | null;
+  latitude: number | null;
+  longitude: number | null;
   image_url: string;
   status: IssueStatus;
   created_at: string;
@@ -62,6 +64,28 @@ export interface IssueTrackerFilters {
   status?: IssueStatus;
   location?: string;
   sort: IssueSort;
+}
+
+export type TrackerView = "list" | "map";
+
+export interface PublicIssueMapItem {
+  id: string;
+  public_reference: string;
+  title: string;
+  category: IssueCategory;
+  severity: IssueSeverity;
+  status: IssueStatus;
+  location: string;
+  landmark: string | null;
+  neighborhood: string | null;
+  latitude: number;
+  longitude: number;
+}
+
+export interface PublicIssueMapResponse {
+  items: PublicIssueMapItem[];
+  total_items: number;
+  unmapped_items: number;
 }
 
 export interface PublicIssueDetail extends PublicIssueListItem {

@@ -10,7 +10,7 @@ import {
   sortOptions,
   statusFilterOptions,
 } from "./constants";
-import type { IssueTrackerFilters } from "./types";
+import type { IssueTrackerFilters, TrackerView } from "./types";
 
 const categories = new Set(categoryFilterOptions.map((option) => option.value));
 const severities = new Set(severityFilterOptions.map((option) => option.value));
@@ -38,4 +38,8 @@ export function trackerFilters(params: URLSearchParams): IssueTrackerFilters {
     location: location || undefined,
     sort: sort && sorts.has(sort) ? sort : "newest",
   };
+}
+
+export function trackerView(params: URLSearchParams): TrackerView {
+  return params.get("view") === "map" ? "map" : "list";
 }

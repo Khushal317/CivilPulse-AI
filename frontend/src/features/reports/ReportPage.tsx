@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
+import { useCallback } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
 
 import { ApiError } from "../../api/client";
@@ -12,12 +13,15 @@ import { SelectField, TextAreaField, TextField } from "../../components/ui/FormF
 import { analyzeReport } from "./api";
 import { categoryOptions } from "./constants";
 import { ImageUploadField } from "./ImageUploadField";
+import { LocationAutocompleteField } from "./LocationAutocompleteField";
 import { reportSchema } from "./reportSchema";
 import type { ReportFormValues } from "./types";
 
 const defaultValues = {
   originalDescription: "",
   location: "",
+  latitude: null,
+  longitude: null,
   landmark: "",
   preferredCategory: "",
   urgencyNote: "",
@@ -29,12 +33,26 @@ export function ReportPage() {
   const navigate = useNavigate();
   const {
     formState: { errors },
+    control,
     handleSubmit,
     register,
+    setValue,
   } = useForm<ReportFormValues>({
     defaultValues,
     resolver: zodResolver(reportSchema),
   });
+  const clearCoordinates = useCallback(() => {
+    setValue("latitude", null, { shouldDirty: true });
+    setValue("longitude", null, { shouldDirty: true });
+  }, [setValue]);
+  const selectPlace = useCallback(
+    (place: { address: string; latitude: number; longitude: number }) => {
+      setValue("location", place.address, { shouldDirty: true, shouldValidate: true });
+      setValue("latitude", place.latitude, { shouldDirty: true, shouldValidate: true });
+      setValue("longitude", place.longitude, { shouldDirty: true, shouldValidate: true });
+    },
+    [setValue],
+  );
   const analyze = useMutation({
     mutationFn: analyzeReport,
     onSuccess: (draft) => {
@@ -103,11 +121,21 @@ export function ReportPage() {
               </div>
             </div>
             <div className="form-grid">
-              <TextField
-                error={errors.location?.message}
-                label="Area or location"
-                placeholder="Sector 12"
-                {...register("location")}
+              <Controller
+                control={control}
+                name="location"
+                render={({ field }) => (
+                  <LocationAutocompleteField
+                    error={errors.location?.message}
+                    inputRef={field.ref}
+                    name={field.name}
+                    onBlur={field.onBlur}
+                    onChange={field.onChange}
+                    onCoordinatesClear={clearCoordinates}
+                    onPlaceSelect={selectPlace}
+                    value={field.value}
+                  />
+                )}
               />
               <TextField
                 error={errors.landmark?.message}

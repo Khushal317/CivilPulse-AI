@@ -16,11 +16,27 @@ const issue = {
   severity: "high",
   location: "Green Park",
   landmark: "Community playground",
+  latitude: 26.9124,
+  longitude: 75.7873,
   image_url: "/api/v1/media/issues/streetlight.jpg",
   status: "in_progress",
   created_at: "2026-06-25T10:00:00Z",
   updated_at: "2026-06-25T10:00:00Z",
   verification_count: 4,
+};
+
+const mapIssue = {
+  id: issue.id,
+  public_reference: issue.public_reference,
+  title: issue.title,
+  category: issue.category,
+  severity: issue.severity,
+  status: issue.status,
+  location: issue.location,
+  landmark: issue.landmark,
+  neighborhood: "Green Park",
+  latitude: 26.9124,
+  longitude: 75.7873,
 };
 
 function jsonResponse(body: unknown, status = 200) {
@@ -39,6 +55,20 @@ function trackerResponse(overrides: Record<string, unknown> = {}) {
     total_pages: 1,
     ...overrides,
   };
+}
+
+function mapResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    items: [mapIssue],
+    total_items: 1,
+    unmapped_items: 0,
+    ...overrides,
+  };
+}
+
+function routePath(input: RequestInfo | URL): string {
+  const raw = input instanceof Request ? input.url : String(input);
+  return new URL(raw).pathname;
 }
 
 function LocationProbe() {
@@ -76,6 +106,10 @@ describe("public tracker", () => {
     expect(screen.getByLabelText("Category")).toHaveValue("streetlight");
     expect(screen.getByLabelText("Status")).toHaveValue("in_progress");
     expect(screen.getByLabelText("Sort by")).toHaveValue("most_verified");
+    expect(screen.getByRole("tab", { name: "List" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
   });
 
   it("writes combined filters and search terms to the URL", async () => {
@@ -130,6 +164,50 @@ describe("public tracker", () => {
 
     expect(screen.getByTestId("current-search")).toHaveTextContent("severity=critical");
     expect(screen.getByTestId("current-search")).toHaveTextContent("page=2");
+  });
+
+  it("switches to URL-backed map view and loads marker data", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const path = routePath(input);
+      if (path === "/api/v1/issues/map") {
+        return Promise.resolve(jsonResponse(mapResponse()));
+      }
+      return Promise.resolve(jsonResponse(trackerResponse()));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderTracker("/issues?category=streetlight");
+
+    await screen.findByText("Broken streetlight near community park");
+    await user.click(screen.getByRole("tab", { name: "Map" }));
+
+    expect(await screen.findByText("1 marker shown")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Map" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    expect(screen.getByTestId("current-search").textContent).toContain("view=map");
+    expect(screen.getByTestId("current-search").textContent).toContain("category=streetlight");
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining("/api/v1/issues/map?category=streetlight"),
+      expect.any(Object),
+    );
+  });
+
+  it("shows empty map results and clears filters without leaving map view", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse(mapResponse({ items: [], total_items: 0, unmapped_items: 0 })),
+      ),
+    );
+    renderTracker("/issues?view=map&severity=critical");
+
+    expect(await screen.findByText("No mappable issues match these filters")).toBeInTheDocument();
+    await user.click(screen.getAllByRole("button", { name: "Clear filters" })[0]);
+
+    expect(screen.getByTestId("current-search").textContent).toBe("?view=map");
   });
 
   it("shows a recoverable API failure state", async () => {

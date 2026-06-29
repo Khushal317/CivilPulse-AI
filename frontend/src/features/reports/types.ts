@@ -17,6 +17,8 @@ export interface ReportDraft {
   suggested_next_action: string;
   location: string;
   landmark: string | null;
+  latitude: number | null;
+  longitude: number | null;
   urgency_note: string | null;
   image_url: string;
   expires_at: string;
@@ -37,6 +39,8 @@ export interface ReportDraftUpdate {
   suggested_next_action?: string;
   location?: string;
   landmark?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface PublishedReport {
@@ -50,10 +54,11 @@ export interface ReportFormValues {
   image: FileList;
   originalDescription: string;
   location: string;
+  latitude: number | null;
+  longitude: number | null;
   landmark: string;
   preferredCategory: IssueCategory | "";
   urgencyNote: string;
   citizenName: string;
   citizenContact: string;
 }
-

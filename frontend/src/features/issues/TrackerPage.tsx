@@ -10,7 +10,7 @@ import { Button } from "../../components/ui/Button";
 import { buttonClassName } from "../../components/ui/buttonStyles";
 import { Card } from "../../components/ui/Card";
 import { SelectField, TextField } from "../../components/ui/FormField";
-import { getPublicIssues } from "./api";
+import { getPublicIssueMap, getPublicIssues } from "./api";
 import {
   categoryFilterOptions,
   severityFilterOptions,
@@ -18,7 +18,9 @@ import {
   statusFilterOptions,
 } from "./constants";
 import { IssueCard } from "./IssueCard";
-import { trackerFilters } from "./searchParams";
+import { IssueMapView } from "./IssueMapView";
+import { trackerFilters, trackerView } from "./searchParams";
+import type { TrackerView } from "./types";
 
 type FilterName = "category" | "severity" | "status" | "sort";
 
@@ -39,13 +41,27 @@ function TrackerSkeleton() {
   );
 }
 
+function clearFiltersForView(view: TrackerView): URLSearchParams {
+  const next = new URLSearchParams();
+  if (view === "map") next.set("view", "map");
+  return next;
+}
+
 export function TrackerPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => trackerFilters(searchParams), [searchParams]);
+  const view = useMemo(() => trackerView(searchParams), [searchParams]);
   const [location, setLocation] = useState(filters.location ?? "");
   const issues = useQuery({
     queryKey: ["public-issues", filters],
     queryFn: ({ signal }) => getPublicIssues(filters, signal),
+    enabled: view === "list",
+    placeholderData: (previous) => previous,
+  });
+  const issueMap = useQuery({
+    queryKey: ["public-issue-map", filters],
+    queryFn: ({ signal }) => getPublicIssueMap(filters, signal),
+    enabled: view === "map",
     placeholderData: (previous) => previous,
   });
 
@@ -57,6 +73,14 @@ export function TrackerPage() {
     const next = new URLSearchParams(searchParams);
     if (!value || (name === "sort" && value === "newest")) next.delete(name);
     else next.set(name, value);
+    next.delete("page");
+    setSearchParams(next);
+  }
+
+  function setView(nextView: TrackerView) {
+    const next = new URLSearchParams(searchParams);
+    if (nextView === "list") next.delete("view");
+    else next.set("view", "map");
     next.delete("page");
     setSearchParams(next);
   }
@@ -87,6 +111,11 @@ export function TrackerPage() {
     filters.sort !== "newest" ? filters.sort : undefined,
   ].filter(Boolean).length;
   const result = issues.data;
+  const mapResult = issueMap.data;
+  const currentTotal =
+    view === "map" ? mapResult?.total_items : result?.total_items;
+  const isUpdating =
+    view === "map" ? issueMap.isFetching && Boolean(mapResult) : issues.isFetching && Boolean(result);
 
   return (
     <section className="page-section tracker-page">
@@ -116,7 +145,11 @@ export function TrackerPage() {
               <p>Filters stay in the URL, so this exact view can be bookmarked or shared.</p>
             </div>
             {activeFilterCount > 0 && (
-              <Button onClick={() => setSearchParams({})} size="small" variant="ghost">
+              <Button
+                onClick={() => setSearchParams(clearFiltersForView(view))}
+                size="small"
+                variant="ghost"
+              >
                 Clear filters
               </Button>
             )}
@@ -185,31 +218,55 @@ export function TrackerPage() {
           </div>
         </Card>
 
+        <div aria-label="Tracker view" className="tracker-view-toggle" role="tablist">
+          <button
+            aria-selected={view === "list"}
+            className={view === "list" ? "active" : undefined}
+            onClick={() => setView("list")}
+            role="tab"
+            type="button"
+          >
+            List
+          </button>
+          <button
+            aria-selected={view === "map"}
+            className={view === "map" ? "active" : undefined}
+            onClick={() => setView("map")}
+            role="tab"
+            type="button"
+          >
+            Map
+          </button>
+        </div>
+
         <div className="tracker-results-heading" aria-live="polite">
           <div>
-            <h2>Community reports</h2>
+            <h2>{view === "map" ? "Issue map" : "Community reports"}</h2>
             <p>
-              {result
-                ? `${result.total_items} ${result.total_items === 1 ? "issue" : "issues"} found`
+              {typeof currentTotal === "number"
+                ? `${currentTotal} ${currentTotal === 1 ? "issue" : "issues"} found`
                 : "Loading current reports…"}
             </p>
           </div>
-          {issues.isFetching && result && <span>Updating…</span>}
+          {isUpdating && <span>Updating…</span>}
         </div>
 
-        {issues.isPending && <TrackerSkeleton />}
-        {issues.isError && (
+        {view === "list" && issues.isPending && <TrackerSkeleton />}
+        {view === "list" && issues.isError && (
           <ErrorState
             description={issues.error.message}
             onRetry={() => void issues.refetch()}
             title="The public tracker could not be loaded"
           />
         )}
-        {result && result.items.length === 0 && (
+        {view === "list" && result && result.items.length === 0 && (
           <EmptyState
             action={
               activeFilterCount > 0 ? (
-                <Button onClick={() => setSearchParams({})} variant="secondary">
+                <Button
+                  onClick={() => setSearchParams(clearFiltersForView(view))}
+                  variant="secondary"
+                >
                   Clear filters
                 </Button>
               ) : (
@@ -226,7 +283,7 @@ export function TrackerPage() {
             title={activeFilterCount > 0 ? "No issues match these filters" : "No reports yet"}
           />
         )}
-        {result && result.items.length > 0 && (
+        {view === "list" && result && result.items.length > 0 && (
           <>
             <div className="issue-grid">
               {result.items.map((issue) => (
@@ -254,6 +311,50 @@ export function TrackerPage() {
               </Button>
             </nav>
           </>
+        )}
+
+        {view === "map" && issueMap.isPending && (
+          <Card className="tracker-map-preview" padding="large">
+            <Skeleton height="360px" />
+          </Card>
+        )}
+        {view === "map" && issueMap.isError && (
+          <ErrorState
+            description={issueMap.error.message}
+            onRetry={() => void issueMap.refetch()}
+            title="The map view could not be loaded"
+          />
+        )}
+        {view === "map" && mapResult && mapResult.items.length === 0 && (
+          <EmptyState
+            action={
+              activeFilterCount > 0 ? (
+                <Button
+                  onClick={() => setSearchParams(clearFiltersForView(view))}
+                  variant="secondary"
+                >
+                  Clear filters
+                </Button>
+              ) : (
+                <Link className={buttonClassName("primary")} to="/report">
+                  Report a mappable issue
+                </Link>
+              )
+            }
+            description={
+              activeFilterCount > 0
+                ? "Try removing a filter or searching another location."
+                : "Map markers appear after reports include coordinates from Google Places."
+            }
+            title={
+              activeFilterCount > 0
+                ? "No mappable issues match these filters"
+                : "No mappable reports yet"
+            }
+          />
+        )}
+        {view === "map" && mapResult && mapResult.items.length > 0 && (
+          <IssueMapView result={mapResult} />
         )}
       </div>
     </section>
