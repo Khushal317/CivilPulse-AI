@@ -26,19 +26,40 @@ interface GoogleMapsMap {
   setZoom: (zoom: number) => void;
 }
 
+type GoogleMapsLatLng = object;
+
 interface GoogleMapsBounds {
   extend: (point: GoogleMapsPoint) => void;
 }
 
 interface GoogleMapsInfoWindow {
   close: () => void;
-  open: (options: { anchor: GoogleMapsMarker; map: GoogleMapsMap }) => void;
+  open: (options: { anchor?: GoogleMapsMarker; map: GoogleMapsMap }) => void;
   setContent: (content: string) => void;
+  setPosition: (position: GoogleMapsPoint | GoogleMapsLatLng) => void;
 }
 
-interface GoogleMapsMarker {
-  addListener: (eventName: "click", callback: () => void) => GoogleMapsListener;
+interface GoogleMapsMapPanes {
+  overlayMouseTarget: HTMLElement;
+}
+
+interface GoogleMapsMapProjection {
+  fromLatLngToDivPixel: (
+    position: GoogleMapsLatLng | GoogleMapsPoint,
+  ) => { x: number; y: number } | null;
+}
+
+interface GoogleMapsOverlayView {
+  draw?(): void;
+  getPanes: () => GoogleMapsMapPanes | null;
+  getProjection: () => GoogleMapsMapProjection | null;
+  onAdd?(): void;
+  onRemove?(): void;
   setMap: (map: GoogleMapsMap | null) => void;
+}
+
+interface GoogleMapsMarker extends GoogleMapsOverlayView {
+  addListener: (eventName: "click", callback: () => void) => GoogleMapsListener;
 }
 
 interface GoogleMapsListener {
@@ -48,6 +69,7 @@ interface GoogleMapsListener {
 interface GoogleMapsForIssues extends GoogleMapsGlobal {
   maps: GoogleMapsGlobal["maps"] & {
     InfoWindow: new () => GoogleMapsInfoWindow;
+    LatLng?: new (latitude: number, longitude: number) => GoogleMapsLatLng;
     LatLngBounds: new () => GoogleMapsBounds;
     Map: new (
       element: HTMLElement,
@@ -60,7 +82,7 @@ interface GoogleMapsForIssues extends GoogleMapsGlobal {
         zoom: number;
       },
     ) => GoogleMapsMap;
-    Marker: new (options: {
+    Marker?: new (options: {
       icon: {
         path: string;
         fillColor: string;
@@ -73,6 +95,7 @@ interface GoogleMapsForIssues extends GoogleMapsGlobal {
       position: GoogleMapsPoint;
       title: string;
     }) => GoogleMapsMarker;
+    OverlayView?: new () => GoogleMapsOverlayView;
   };
 }
 
@@ -117,9 +140,11 @@ const escapeHtml = (value: string): string =>
 
 const isGoogleMapsForIssues = (google: GoogleMapsGlobal): google is GoogleMapsForIssues =>
   typeof google.maps.Map === "function" &&
-  typeof (google.maps as Record<string, unknown>).Marker === "function" &&
   typeof (google.maps as Record<string, unknown>).InfoWindow === "function" &&
-  typeof (google.maps as Record<string, unknown>).LatLngBounds === "function";
+  typeof (google.maps as Record<string, unknown>).LatLngBounds === "function" &&
+  (typeof (google.maps as Record<string, unknown>).Marker === "function" ||
+    (typeof (google.maps as Record<string, unknown>).OverlayView === "function" &&
+      typeof (google.maps as Record<string, unknown>).LatLng === "function"));
 
 function markerColor(issue: PublicIssueMapItem): MarkerColor {
   if (issue.status === "resolved") return "green";
@@ -147,6 +172,90 @@ function popupHtml(issue: PublicIssueMapItem): string {
       </a>
     </article>
   `;
+}
+
+function createHtmlMarkerElement(issue: PublicIssueMapItem): HTMLButtonElement {
+  const marker = document.createElement("button");
+  marker.type = "button";
+  marker.className = `tracker-map-html-marker tracker-map-html-marker-${markerColor(issue)}`;
+  marker.setAttribute("aria-label", `Open ${issue.title}`);
+  marker.title = issue.title;
+  return marker;
+}
+
+function createHtmlMarker(
+  google: GoogleMapsForIssues,
+  issue: PublicIssueMapItem,
+  map: GoogleMapsMap,
+  onClick: (position: GoogleMapsPoint | GoogleMapsLatLng) => void,
+): GoogleMapsOverlayView | null {
+  if (typeof google.maps.OverlayView !== "function" || typeof google.maps.LatLng !== "function") {
+    return null;
+  }
+
+  const OverlayView = google.maps.OverlayView;
+  const position = new google.maps.LatLng(issue.latitude, issue.longitude);
+
+  class IssueMarkerOverlay extends OverlayView {
+    private element: HTMLButtonElement | null = null;
+
+    onAdd() {
+      const panes = this.getPanes();
+      if (!panes) return;
+
+      this.element = createHtmlMarkerElement(issue);
+      this.element.addEventListener("click", this.openPopup);
+      panes.overlayMouseTarget.append(this.element);
+    }
+
+    draw() {
+      if (!this.element) return;
+      const point = this.getProjection()?.fromLatLngToDivPixel(position);
+      if (!point) return;
+
+      this.element.style.transform = `translate(${point.x}px, ${point.y}px) translate(-50%, -100%)`;
+    }
+
+    onRemove() {
+      this.element?.removeEventListener("click", this.openPopup);
+      this.element?.remove();
+      this.element = null;
+    }
+
+    private openPopup = () => {
+      onClick(position);
+    };
+  }
+
+  const marker = new IssueMarkerOverlay();
+  marker.setMap(map);
+  return marker;
+}
+
+function createLegacyMarker(
+  google: GoogleMapsForIssues,
+  issue: PublicIssueMapItem,
+  map: GoogleMapsMap,
+  onClick: (position: GoogleMapsPoint, marker: GoogleMapsMarker) => void,
+): { listener: GoogleMapsListener; marker: GoogleMapsMarker } | null {
+  if (typeof google.maps.Marker !== "function") return null;
+
+  const position = { lat: issue.latitude, lng: issue.longitude };
+  const marker = new google.maps.Marker({
+    icon: {
+      fillColor: markerColors[markerColor(issue)],
+      fillOpacity: 1,
+      path: markerPath,
+      scale: 1.45,
+      strokeColor: "#ffffff",
+      strokeWeight: 2,
+    },
+    map,
+    position,
+    title: issue.title,
+  });
+  const listener = marker.addListener("click", () => onClick(position, marker));
+  return { listener, marker };
 }
 
 function IssueMapFallback({
@@ -189,7 +298,7 @@ function IssueMapFallback({
 
 export function IssueMapView({ result }: IssueMapViewProps) {
   const mapElement = useRef<HTMLDivElement | null>(null);
-  const markers = useRef<GoogleMapsMarker[]>([]);
+  const markers = useRef<GoogleMapsOverlayView[]>([]);
   const listeners = useRef<GoogleMapsListener[]>([]);
   const [fallbackMessage, setFallbackMessage] = useState<string | null>(null);
 
@@ -230,26 +339,32 @@ export function IssueMapView({ result }: IssueMapViewProps) {
         result.items.forEach((issue) => {
           const position = { lat: issue.latitude, lng: issue.longitude };
           bounds.extend(position);
-          const marker = new google.maps.Marker({
-            icon: {
-              fillColor: markerColors[markerColor(issue)],
-              fillOpacity: 1,
-              path: markerPath,
-              scale: 1.45,
-              strokeColor: "#ffffff",
-              strokeWeight: 2,
-            },
-            map,
-            position,
-            title: issue.title,
-          });
-          markers.current.push(marker);
-          listeners.current.push(
-            marker.addListener("click", () => {
-              infoWindow.setContent(popupHtml(issue));
+
+          const openPopup = (
+            popupPosition: GoogleMapsPoint | GoogleMapsLatLng,
+            marker?: GoogleMapsMarker,
+          ) => {
+            infoWindow.setContent(popupHtml(issue));
+            if (marker) {
               infoWindow.open({ anchor: marker, map });
-            }),
-          );
+              return;
+            }
+
+            infoWindow.setPosition(popupPosition);
+            infoWindow.open({ map });
+          };
+
+          const htmlMarker = createHtmlMarker(google, issue, map, openPopup);
+          if (htmlMarker) {
+            markers.current.push(htmlMarker);
+            return;
+          }
+
+          const markerResult = createLegacyMarker(google, issue, map, openPopup);
+          if (markerResult) {
+            markers.current.push(markerResult.marker);
+            listeners.current.push(markerResult.listener);
+          }
         });
 
         if (result.items.length === 1) {

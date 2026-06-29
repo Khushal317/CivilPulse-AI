@@ -8,7 +8,9 @@ import { Spinner } from "../../components/feedback/Loading";
 import { Badge } from "../../components/ui/Badge";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { CivicStatCard } from "../../components/ui/CivicStatCard";
 import { SelectField, TextAreaField, TextField } from "../../components/ui/FormField";
+import { GeminiLabel } from "../../components/ui/GeminiLabel";
 import { getAreas } from "../areas/api";
 import type { MissionDetail, MissionStatus } from "../missions/types";
 import {
@@ -140,7 +142,10 @@ function MissionCard({
           <dd>{formatCategory(mission.category)}</dd>
         </div>
       </dl>
-      <p className="operations-action">{mission.ai_reason}</p>
+      <div className="mission-ai-reason admin-mission-reason">
+        <GeminiLabel>AI-assisted reason</GeminiLabel>
+        <p>{mission.ai_reason}</p>
+      </div>
       {mission.linked_issue_ids.length > 0 && (
         <p className="admin-muted">
           Linked issue IDs: {mission.linked_issue_ids.join(", ")}
@@ -374,6 +379,31 @@ export function MissionGeneratorPanel() {
         </Button>
       </div>
 
+      {missions.data && (
+        <div className="admin-mission-summary-grid" aria-label="Mission console snapshot">
+          <CivicStatCard
+            description="Missions waiting for admin review before public visibility."
+            eyebrow="Drafts"
+            icon="✎"
+            value={missions.data.drafts.length}
+          />
+          <CivicStatCard
+            description="Currently public missions residents can join."
+            eyebrow="Active"
+            icon="⚑"
+            tone="success"
+            value={missions.data.active.length}
+          />
+          <CivicStatCard
+            description="Completed and expired missions kept for lifecycle review."
+            eyebrow="Closed"
+            icon="✓"
+            tone="ai"
+            value={missions.data.completed.length + missions.data.expired.length}
+          />
+        </div>
+      )}
+
       {generate.isPending && (
         <div className="operations-inline-state">
           <Spinner label="The Civic Mission Generator is creating draft missions…" />
@@ -410,8 +440,13 @@ export function MissionGeneratorPanel() {
       )}
 
       <Card as="section" className="operations-section" padding="large">
-        <p className="eyebrow">Manual mission builder</p>
-        <h3>Create a community mission manually</h3>
+        <div className="detail-section-heading">
+          <div>
+            <p className="eyebrow">Manual mission builder</p>
+            <h3>Create a community mission manually</h3>
+          </div>
+          <GeminiLabel>Optional AI refinement</GeminiLabel>
+        </div>
         <p className="admin-muted">
           Write the mission yourself, optionally refine the wording with AI, then save it
           as an admin-review draft or publish it immediately.

@@ -8,14 +8,22 @@ import { Seo } from "../../components/Seo";
 import { Button } from "../../components/ui/Button";
 import { buttonClassName } from "../../components/ui/buttonStyles";
 import { Card } from "../../components/ui/Card";
+import { CivicStatCard } from "../../components/ui/CivicStatCard";
+import { GeminiLabel } from "../../components/ui/GeminiLabel";
+import { TrendPill } from "../../components/ui/TrendPill";
 import { getMission, submitMissionAction } from "./api";
-import type { MissionActionType, MissionDetail } from "./types";
+import type { MissionActionType, MissionDetail, MissionStatus } from "./types";
 
 function label(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function titleLabel(value: string) {
+  return label(value).replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function progressPercent(mission: MissionDetail) {
+  if (mission.target_count <= 0) return 0;
   return Math.min(100, Math.round((mission.progress_count / mission.target_count) * 100));
 }
 
@@ -35,6 +43,26 @@ const actionLabels: Record<MissionActionType, string> = {
   confirmed_fixed: "Confirm fixed",
   volunteered: "Volunteer",
 };
+
+function missionStatusClass(status: MissionStatus) {
+  return `mission-status mission-status-${status}`;
+}
+
+function statusDirection(status: MissionStatus) {
+  if (status === "completed") return "up";
+  if (status === "expired") return "down";
+  return "flat";
+}
+
+function missionStateMessage(mission: MissionDetail) {
+  if (mission.status === "completed") {
+    return "Mission completed — the reward impact has been applied to this area’s Civic Genome.";
+  }
+  if (mission.status === "expired") {
+    return "This mission expired before reaching its target. It stays visible as civic context.";
+  }
+  return "This mission is active. Join only if you can take a safe public action.";
+}
 
 export function MissionDetailPage() {
   const { missionId } = useParams();
@@ -145,30 +173,68 @@ export function MissionDetailPage() {
             <h1>{data.title}</h1>
             <p className="page-copy">{data.goal_description}</p>
             <div className="area-card-meta">
-              <span>{label(data.status)}</span>
+              <span className={missionStatusClass(data.status)}>{label(data.status)}</span>
               <span>{data.area.name}</span>
               {data.category && <span>{label(data.category)}</span>}
             </div>
           </div>
         </header>
 
+        <div className="mission-summary-grid" aria-label="Mission detail snapshot">
+          <CivicStatCard
+            description="Public actions recorded toward this mission target."
+            eyebrow="Quest Progress"
+            icon="⚑"
+            value={`${data.progress_count}/${data.target_count}`}
+          />
+          <CivicStatCard
+            description="Residents who joined this community mission."
+            eyebrow="Residents Joined"
+            icon="🤝"
+            tone="success"
+            value={data.joined_count}
+          />
+          <CivicStatCard
+            description={rewardLabel(data.reward)}
+            eyebrow="Reward Impact"
+            icon="✦"
+            tone="ai"
+            value={titleLabel(data.status)}
+          />
+        </div>
+
         <div className="area-detail-grid">
-          <Card padding="large">
+          <Card className="mission-progress-card" padding="large">
             <p className="eyebrow">Mission progress</p>
             <h2>
               {data.progress_count}/{data.target_count} actions completed
             </h2>
-            <div className="mission-progress" aria-label={`${progress}% complete`}>
-              <span style={{ width: `${progress}%` }} />
+            <div className="mission-quest-panel">
+              <div className="mission-progress-heading">
+                <span>Completion</span>
+                <strong>{progress}%</strong>
+              </div>
+              <div className="mission-progress" aria-label={`${progress}% complete`}>
+                <span style={{ width: `${progress}%` }} />
+              </div>
+              <div className="mission-quest-pills">
+                <TrendPill direction={statusDirection(data.status)}>
+                  {titleLabel(data.status)}
+                </TrendPill>
+                <TrendPill direction={data.joined_count > 0 ? "up" : "flat"}>
+                  {data.joined_count} joined
+                </TrendPill>
+                <TrendPill direction="up">{rewardLabel(data.reward)}</TrendPill>
+              </div>
             </div>
-            <p className="admin-muted">{data.ai_reason}</p>
+            <div className="mission-ai-reason">
+              <GeminiLabel>AI-assisted reason</GeminiLabel>
+              <p>{data.ai_reason}</p>
+            </div>
             <p className="admin-muted">{data.joined_count} citizen(s) joined this mission.</p>
-            {data.status === "completed" && (
-              <p className="operations-action">
-                Mission completed — the reward impact has been applied to this area’s Civic
-                Genome.
-              </p>
-            )}
+            <p className={data.status === "completed" ? "operations-action" : "admin-muted"}>
+              {missionStateMessage(data)}
+            </p>
           </Card>
 
           <Card padding="large">
@@ -189,7 +255,7 @@ export function MissionDetailPage() {
           <p className="admin-muted">{rewardLabel(data.reward)}</p>
         </Card>
 
-        <Card padding="large">
+        <Card className="mission-participation-card" padding="large">
           <p className="eyebrow">Participate</p>
           <h2>Take a safe public action</h2>
           {canAct ? (
@@ -198,7 +264,7 @@ export function MissionDetailPage() {
                 Use these actions only for things you can safely observe in public. Do not
                 enter dangerous areas or replace official repair work.
               </p>
-              <div className="admin-actions">
+              <div className="mission-action-grid">
                 {actionButton("joined")}
                 {actionButton("volunteered")}
               </div>
@@ -225,7 +291,7 @@ export function MissionDetailPage() {
                 <li key={issueId}>
                   <Link to={`/issues/${issueId}`}>View linked issue</Link>
                   {canAct && (
-                    <div className="admin-actions">
+                    <div className="mission-action-grid">
                       {actionButton("verified_issue", issueId)}
                       {actionButton("confirmed_unresolved", issueId)}
                       {actionButton("confirmed_fixed", issueId)}

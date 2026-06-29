@@ -7,6 +7,8 @@ import { Spinner } from "../../components/feedback/Loading";
 import { Seo } from "../../components/Seo";
 import { buttonClassName } from "../../components/ui/buttonStyles";
 import { Card } from "../../components/ui/Card";
+import { CivicStatCard } from "../../components/ui/CivicStatCard";
+import { TrendPill } from "../../components/ui/TrendPill";
 import { getAdminDashboard } from "./api";
 import { AdminIssueTable } from "./AdminIssueTable";
 import { OperationsAgentPanel } from "./OperationsAgentPanel";
@@ -18,6 +20,25 @@ const metricLabels = {
   pending: "Pending action",
   resolved: "Resolved",
 } as const;
+
+const metricIcons: Record<keyof typeof metricLabels, string> = {
+  total_reports: "📥",
+  high_severity: "⚠",
+  verified: "✓",
+  pending: "⏱",
+  resolved: "↗",
+};
+
+const metricTones: Record<
+  keyof typeof metricLabels,
+  "brand" | "danger" | "neutral" | "success" | "warning"
+> = {
+  total_reports: "brand",
+  high_severity: "danger",
+  verified: "success",
+  pending: "warning",
+  resolved: "neutral",
+};
 
 export function AdminDashboardPage() {
   const dashboard = useQuery({
@@ -55,9 +76,12 @@ export function AdminDashboardPage() {
       />
       <header className="admin-page-heading">
         <div>
-          <p className="eyebrow">Issue management</p>
+          <p className="eyebrow">Civic Operations</p>
           <h1>Administrator dashboard</h1>
-          <p>Monitor civic reports and prioritize the issues requiring attention.</p>
+          <p>
+            Monitor civic signals, prioritize unresolved risks, and coordinate AI-assisted
+            operations from one protected control room.
+          </p>
         </div>
         <Link className={buttonClassName("primary")} to="/admin/issues">
           Manage all issues
@@ -66,10 +90,21 @@ export function AdminDashboardPage() {
 
       <div className="admin-metric-grid">
         {Object.entries(data.metrics).map(([key, value]) => (
-          <Card className="admin-metric" key={key}>
-            <span>{metricLabels[key as keyof typeof metricLabels]}</span>
-            <strong>{value}</strong>
-          </Card>
+          <CivicStatCard
+            className="admin-metric"
+            description={
+              key === "pending"
+                ? "Reports still needing admin movement."
+                : key === "high_severity"
+                  ? "High-severity reports in the queue."
+                  : undefined
+            }
+            eyebrow={metricLabels[key as keyof typeof metricLabels]}
+            icon={metricIcons[key as keyof typeof metricLabels]}
+            key={key}
+            tone={metricTones[key as keyof typeof metricLabels]}
+            value={value}
+          />
         ))}
       </div>
 
@@ -127,6 +162,14 @@ export function AdminDashboardPage() {
           <div>
             <p className="eyebrow">Latest reports</p>
             <h2>Recently submitted issues</h2>
+            <div className="admin-signal-row" aria-label="Dashboard signals">
+              <TrendPill direction={data.latest_reports.length ? "up" : "flat"}>
+                {data.latest_reports.length} latest
+              </TrendPill>
+              <TrendPill direction={data.priority_issues.length ? "up" : "flat"}>
+                {data.priority_issues.length} priority
+              </TrendPill>
+            </div>
           </div>
           <Link to="/admin/issues">View all</Link>
         </div>

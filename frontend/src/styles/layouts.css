@@ -270,6 +270,13 @@
 
   .admin-nav-list {
     flex-direction: row;
+    gap: var(--space-2);
+    overflow-x: auto;
+    padding-bottom: var(--space-1);
+  }
+
+  .admin-nav-link {
+    white-space: nowrap;
   }
 
   .admin-sidebar > .button {
@@ -288,5 +295,29 @@
 
   .admin-mobile-header .button {
     margin-left: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .container {
+    width: min(var(--content-width), calc(100% - 1rem));
+  }
+
+  .brand {
+    gap: 0.5rem;
+  }
+
+  .brand-mark {
+    width: 2rem;
+    height: 2rem;
+  }
+
+  .nav-list {
+    right: 0.5rem;
+    left: 0.5rem;
+  }
+
+  .admin-sidebar {
+    padding-inline: var(--space-3);
   }
 }

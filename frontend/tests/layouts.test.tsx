@@ -156,7 +156,7 @@ describe("application route shells", () => {
     ["/neighborhoods", "Every neighborhood has a civic character", "Primary navigation"],
     ["/neighborhoods/civicpulse-city-sector-12", "Sector 12", "Primary navigation"],
     ["/rankings", "Neighborhood leaderboard for civic progress", "Primary navigation"],
-    ["/missions", "Useful missions for local civic progress", "Primary navigation"],
+    ["/missions", "Community quests for local civic progress", "Primary navigation"],
     [
       "/missions/22222222-2222-4222-8222-222222222222",
       "Verify repaired streetlights",

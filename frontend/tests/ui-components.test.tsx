@@ -4,6 +4,7 @@ import { useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { ErrorState } from "../src/components/feedback/ErrorState";
+import { EmptyState } from "../src/components/feedback/EmptyState";
 import {
   CategoryBadge,
   SeverityBadge,
@@ -141,18 +142,23 @@ describe("UI components", () => {
     expect(cancel).toHaveFocus();
   });
 
-  it("supports loading buttons and retryable error states", async () => {
+  it("supports polished empty, loading, and retryable error states", async () => {
     const retry = vi.fn();
     const user = userEvent.setup();
-    render(
+    const { container } = render(
       <>
+        <EmptyState description="No civic signals match the current filters." title="No signals yet" />
         <Button isLoading>Save</Button>
         <ErrorState onRetry={retry} />
       </>,
     );
 
+    expect(screen.getByRole("heading", { name: "No signals yet" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Working…" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(retry).toHaveBeenCalledOnce();
+
+    const accessibility = await runAccessibilityCheck(container);
+    expect(accessibility.violations).toEqual([]);
   });
 });

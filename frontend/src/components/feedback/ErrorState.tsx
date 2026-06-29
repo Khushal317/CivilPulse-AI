@@ -17,8 +17,10 @@ export function ErrorState({
       <span className="state-icon" aria-hidden="true">
         !
       </span>
-      <h2>{title}</h2>
-      <p>{description}</p>
+      <div className="state-copy">
+        <h2>{title}</h2>
+        <p>{description}</p>
+      </div>
       {onRetry && (
         <div className="state-action">
           <Button onClick={onRetry}>Try again</Button>
@@ -27,4 +29,3 @@ export function ErrorState({
     </Card>
   );
 }
-

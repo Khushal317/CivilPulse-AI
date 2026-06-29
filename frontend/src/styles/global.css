@@ -134,4 +134,22 @@ h3 {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+
+  .button:hover:not(:disabled),
+  .card:hover,
+  .issue-card:not(.issue-card-skeleton):hover,
+  .mission-card:hover,
+  .landing-area-row:hover,
+  .landing-mission-row:hover,
+  .landing-feed-row:hover,
+  .tracker-map-html-marker:hover,
+  .tracker-map-html-marker:focus-visible {
+    transform: none !important;
+    scale: 1 !important;
+  }
+
+  .spinner,
+  .skeleton {
+    animation: none !important;
+  }
 }

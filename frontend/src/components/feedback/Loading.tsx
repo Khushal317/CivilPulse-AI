@@ -1,6 +1,6 @@
 export function Spinner({ label = "Loading" }: { label?: string }) {
   return (
-    <div className="loading-indicator" role="status">
+    <div aria-live="polite" className="loading-indicator" role="status">
       <span className="spinner" aria-hidden="true" />
       <span>{label}</span>
     </div>
@@ -16,4 +16,3 @@ export function Skeleton({ height = "1rem", width = "100%" }: { height?: string;
     />
   );
 }
-

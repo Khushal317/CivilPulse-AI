@@ -529,8 +529,13 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-pill);
   color: var(--color-muted);
+  background: rgb(255 255 255 / 58%);
   font-weight: 650;
+  box-shadow: var(--shadow-sm);
 }
 
 .skeleton {
@@ -549,16 +554,39 @@
 
 .state-card {
   display: grid;
+  overflow: hidden;
   justify-items: start;
-  gap: var(--space-3);
+  gap: var(--space-4);
+  border-color: rgb(188 200 190 / 70%);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(23 100 60 / 8%), transparent 14rem),
+    var(--gradient-surface);
 }
 
-.state-card h2,
-.state-card p {
+.state-card::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgb(255 255 255 / 34%), transparent);
+  content: "";
+}
+
+.state-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.state-copy {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.state-copy h2,
+.state-copy p {
   margin: 0;
 }
 
-.state-card p {
+.state-copy p {
   max-width: 560px;
   color: var(--color-muted);
   line-height: 1.6;
@@ -566,6 +594,9 @@
 
 .state-card-error {
   border-color: rgb(164 43 49 / 22%);
+  background:
+    radial-gradient(circle at 100% 0%, rgb(164 43 49 / 8%), transparent 14rem),
+    var(--gradient-surface);
 }
 
 .state-icon {
@@ -588,6 +619,12 @@
 .state-action,
 .state-followup {
   margin-top: var(--space-3);
+}
+
+.state-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
 }
 
 .dialog-backdrop {

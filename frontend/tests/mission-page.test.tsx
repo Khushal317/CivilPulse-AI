@@ -68,8 +68,12 @@ describe("Community Missions", () => {
 
     expect(await screen.findByRole("heading", { name: "Verify repaired streetlights" }))
       .toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Community quests for local civic progress" }))
+      .toBeInTheDocument();
+    expect(screen.getByText("Active Quests")).toBeInTheDocument();
     expect(screen.getByText("2/5 progress")).toBeInTheDocument();
-    expect(screen.getByText("4 joined")).toBeInTheDocument();
+    expect(screen.getAllByText("4 joined")).toHaveLength(2);
+    expect(screen.getByText("AI-assisted reason")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Sector 12" }))
       .toHaveAttribute("href", "/neighborhoods/civicpulse-city-sector-12");
     expect(screen.getByRole("link", { name: "View mission" }))
@@ -95,7 +99,10 @@ describe("Community Missions", () => {
       .toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "4/5 actions completed" }))
       .toBeInTheDocument();
-    expect(screen.getByText("20 participation points when completed")).toBeInTheDocument();
+    expect(screen.getByText("Quest Progress")).toBeInTheDocument();
+    expect(screen.getByText("Reward Impact")).toBeInTheDocument();
+    expect(screen.getAllByText("20 participation points when completed")).toHaveLength(3);
+    expect(screen.getByText("AI-assisted reason")).toBeInTheDocument();
     expect(screen.getByText("4 citizen(s) joined this mission.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View Civic Genome" }))
       .toHaveAttribute("href", "/neighborhoods/civicpulse-city-sector-12");

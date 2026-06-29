@@ -8,6 +8,7 @@ import { Spinner } from "../../components/feedback/Loading";
 import { Seo } from "../../components/Seo";
 import { Button } from "../../components/ui/Button";
 import { Card } from "../../components/ui/Card";
+import { CivicStatCard } from "../../components/ui/CivicStatCard";
 import { SelectField, TextField } from "../../components/ui/FormField";
 import type { IssueCategory, IssueSeverity, IssueStatus } from "../../types/domain";
 import {
@@ -130,6 +131,30 @@ export function AdminIssuesPage() {
           onRetry={() => void issues.refetch()}
           title="The issue queue could not be loaded"
         />
+      )}
+      {issues.data && (
+        <div className="admin-queue-summary-grid" aria-label="Issue queue snapshot">
+          <CivicStatCard
+            description="Private records matching the current admin filters."
+            eyebrow="Matching Records"
+            icon="📋"
+            value={issues.data.total_items}
+          />
+          <CivicStatCard
+            description="Filters stay in the URL so this queue view is repeatable."
+            eyebrow="Current Page"
+            icon="⌁"
+            tone="ai"
+            value={`${issues.data.page}/${Math.max(issues.data.total_pages, 1)}`}
+          />
+          <CivicStatCard
+            description="Contact details stay inside protected issue records only."
+            eyebrow="Privacy Mode"
+            icon="🔒"
+            tone="success"
+            value="Protected"
+          />
+        </div>
       )}
       {issues.data && issues.data.items.length === 0 && (
         <EmptyState
