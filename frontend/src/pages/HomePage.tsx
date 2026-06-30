@@ -8,7 +8,6 @@ import { buttonClassName } from "../components/ui/buttonStyles";
 import { CivicStatCard } from "../components/ui/CivicStatCard";
 import { GeminiLabel } from "../components/ui/GeminiLabel";
 import { ScoreMeter } from "../components/ui/ScoreMeter";
-import { TrendPill } from "../components/ui/TrendPill";
 import { getAreas } from "../features/areas/api";
 import type { AreaSummary } from "../features/areas/types";
 import { getPublicIssues } from "../features/issues/api";
@@ -306,9 +305,6 @@ export function HomePage() {
                       <strong>{area.name}</strong>
                       <small>{area.city}</small>
                     </div>
-                    <TrendPill direction={area.open_issues > 0 ? "flat" : "up"}>
-                      {titleLabel(area.status_label)}
-                    </TrendPill>
                   </Link>
                 ))}
               </div>

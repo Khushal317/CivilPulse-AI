@@ -25,6 +25,18 @@ Rules:
   structural collapse, severe contamination, or similarly acute hazards.
 """.strip()
 
+_ANALYSIS_MODEL_ATTR = "_civicpulse_model_name"
+
+
+def tag_analysis_model(analysis: AIAnalysis, model_name: str) -> AIAnalysis:
+    object.__setattr__(analysis, _ANALYSIS_MODEL_ATTR, model_name)
+    return analysis
+
+
+def analysis_model_name(analysis: AIAnalysis, default: str) -> str:
+    model_name = getattr(analysis, _ANALYSIS_MODEL_ATTR, default)
+    return model_name if isinstance(model_name, str) else default
+
 
 class CivicIssueAnalyzer(Protocol):
     model_name: str
@@ -170,9 +182,46 @@ class GeminiCivicIssueAnalyzer:
         ) from last_error
 
 
+class SafeFallbackCivicIssueAnalyzer:
+    """Use Gemini first, but keep citizen reporting usable when Gemini is unreachable."""
+
+    def __init__(
+        self,
+        primary: CivicIssueAnalyzer,
+        fallback: CivicIssueAnalyzer,
+    ) -> None:
+        self._primary = primary
+        self._fallback = fallback
+        self.model_name = primary.model_name
+
+    def analyze(
+        self,
+        report: AIReportInput,
+        image_bytes: bytes,
+        image_mime: str,
+    ) -> AIAnalysis:
+        self.model_name = self._primary.model_name
+        try:
+            return tag_analysis_model(
+                self._primary.analyze(report, image_bytes, image_mime),
+                self._primary.model_name,
+            )
+        except AppError as exc:
+            if exc.code not in {"ai_unavailable", "ai_invalid_response"}:
+                raise
+        self.model_name = self._fallback.model_name
+        return tag_analysis_model(
+            self._fallback.analyze(report, image_bytes, image_mime),
+            self._fallback.model_name,
+        )
+
+
 @lru_cache
 def get_civic_issue_analyzer() -> CivicIssueAnalyzer:
     settings = get_settings()
     if settings.ai_provider == "gemini":
-        return GeminiCivicIssueAnalyzer(settings)
+        return SafeFallbackCivicIssueAnalyzer(
+            GeminiCivicIssueAnalyzer(settings),
+            DemoCivicIssueAnalyzer(),
+        )
     return DemoCivicIssueAnalyzer()

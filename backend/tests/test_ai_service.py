@@ -6,7 +6,12 @@ from app.core.config import Settings
 from app.core.errors import AppError
 from app.domain.enums import IssueCategory
 from app.schemas.issues import AIReportInput
-from app.services.ai import GeminiCivicIssueAnalyzer
+from app.services.ai import (
+    DemoCivicIssueAnalyzer,
+    GeminiCivicIssueAnalyzer,
+    SafeFallbackCivicIssueAnalyzer,
+    analysis_model_name,
+)
 
 
 def report_input() -> AIReportInput:
@@ -112,3 +117,17 @@ def test_gemini_transport_failure_returns_safe_error() -> None:
     assert caught.value.code == "ai_unavailable"
     assert caught.value.status_code == 503
     assert "private details" not in caught.value.message
+
+
+def test_safe_fallback_issue_analyzer_uses_demo_when_gemini_is_unavailable() -> None:
+    FakeGenAIClient.next_response = TimeoutError("network unreachable")
+    analyzer = SafeFallbackCivicIssueAnalyzer(
+        GeminiCivicIssueAnalyzer(settings()),
+        DemoCivicIssueAnalyzer(),
+    )
+
+    result = analyzer.analyze(report_input(), b"image", "image/png")
+
+    assert result.category is IssueCategory.ROAD_DAMAGE
+    assert analyzer.model_name == "demo-civic-analyzer-v1"
+    assert analysis_model_name(result, "missing") == "demo-civic-analyzer-v1"

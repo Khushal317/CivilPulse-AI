@@ -274,11 +274,37 @@ class GeminiCivicMissionGenerator:
         ) from last_error
 
 
+class SafeFallbackMissionGenerator:
+    """Use Gemini mission ideas first, with a deterministic local fallback for demos."""
+
+    def __init__(
+        self,
+        primary: CivicMissionGenerator,
+        fallback: CivicMissionGenerator,
+    ) -> None:
+        self._primary = primary
+        self._fallback = fallback
+        self.model_name = primary.model_name
+
+    def generate(self, context: MissionContext) -> MissionGenerationPayload:
+        self.model_name = self._primary.model_name
+        try:
+            return self._primary.generate(context)
+        except AppError as exc:
+            if exc.code not in {"mission_ai_unavailable", "ai_invalid_response"}:
+                raise
+        self.model_name = self._fallback.model_name
+        return self._fallback.generate(context)
+
+
 @lru_cache
 def get_civic_mission_generator() -> CivicMissionGenerator:
     settings = get_settings()
     if settings.ai_provider == "gemini":
-        return GeminiCivicMissionGenerator(settings)
+        return SafeFallbackMissionGenerator(
+            GeminiCivicMissionGenerator(settings),
+            DemoCivicMissionGenerator(),
+        )
     return DemoCivicMissionGenerator()
 
 

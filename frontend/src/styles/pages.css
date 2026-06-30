@@ -36,11 +36,7 @@
 }
 
 .landing-city-hero::after {
-  inset: 12% auto auto 5%;
-  width: 10rem;
-  height: 10rem;
-  border-radius: 50%;
-  background: rgb(109 75 216 / 10%);
+  display: none;
 }
 
 .landing-city-hero .container {
@@ -300,20 +296,26 @@
 
 .landing-preview-grid {
   align-items: stretch;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .landing-preview-card {
   display: grid;
   align-content: start;
   gap: var(--space-6);
-  overflow: hidden;
+  min-width: 0;
+  overflow: visible;
 }
 
 .landing-preview-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: var(--space-6);
+  gap: var(--space-4);
+}
+
+.landing-preview-heading > div {
+  min-width: 0;
 }
 
 .landing-preview-heading h2 {
@@ -324,6 +326,7 @@
 
 .landing-preview-heading a {
   flex: 0 0 auto;
+  padding-top: 0.2rem;
   color: var(--color-brand);
   font-size: var(--font-size-sm);
   font-weight: 820;
@@ -369,7 +372,7 @@
 }
 
 .landing-area-row {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .landing-area-row > span {

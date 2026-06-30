@@ -17,6 +17,7 @@ export interface ReportDraft {
   suggested_next_action: string;
   location: string;
   landmark: string | null;
+  ai_model: string;
   latitude: number | null;
   longitude: number | null;
   urgency_note: string | null;

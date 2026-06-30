@@ -16,6 +16,7 @@ from app.services.mission_generation import (
     DemoCivicMissionGenerator,
     GeminiCivicMissionGenerator,
     MissionGenerationService,
+    SafeFallbackMissionGenerator,
     mission_generation_prompt,
 )
 
@@ -197,6 +198,19 @@ def test_gemini_mission_generator_returns_safe_provider_error() -> None:
     assert caught.value.code == "mission_ai_unavailable"
     assert caught.value.status_code == 503
     assert "api key" not in caught.value.message.lower()
+
+
+def test_safe_fallback_mission_generator_uses_demo_when_gemini_is_unavailable() -> None:
+    FakeGenAIClient.next_response = TimeoutError("network unreachable")
+    generator = SafeFallbackMissionGenerator(
+        GeminiCivicMissionGenerator(settings()),
+        DemoCivicMissionGenerator(),
+    )
+
+    result = generator.generate(mission_context())
+
+    assert result.missions[0].linked_issue_ids == [ISSUE_ID]
+    assert generator.model_name == "demo-civic-mission-generator-v1"
 
 
 class FakeMissionRepository:

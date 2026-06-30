@@ -94,6 +94,7 @@ class ReportDraftResponse(AIAnalysis, OptionalCoordinates):
     original_description: str
     location: str
     landmark: str | None
+    ai_model: str
     urgency_note: str | None
     image_url: str
     expires_at: datetime

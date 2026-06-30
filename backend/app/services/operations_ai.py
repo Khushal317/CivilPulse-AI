@@ -406,9 +406,38 @@ class GeminiCivicOperationsAnalyzer:
         ) from last_error
 
 
+class SafeFallbackOperationsAnalyzer:
+    """Keep administrator analysis available when the Gemini provider is down."""
+
+    def __init__(
+        self,
+        primary: CivicOperationsAnalyzer,
+        fallback: CivicOperationsAnalyzer,
+    ) -> None:
+        self._primary = primary
+        self._fallback = fallback
+        self.model_name = primary.model_name
+
+    def analyze(self, issues: list[OperationsIssueInput]) -> OperationsAnalysis:
+        self.model_name = self._primary.model_name
+        try:
+            return self._primary.analyze(issues)
+        except AppError as exc:
+            if exc.code not in {
+                "operations_ai_unavailable",
+                "ai_invalid_response",
+            }:
+                raise
+        self.model_name = self._fallback.model_name
+        return self._fallback.analyze(issues)
+
+
 @lru_cache
 def get_civic_operations_analyzer() -> CivicOperationsAnalyzer:
     settings = get_settings()
     if settings.ai_provider == "gemini":
-        return GeminiCivicOperationsAnalyzer(settings)
+        return SafeFallbackOperationsAnalyzer(
+            GeminiCivicOperationsAnalyzer(settings),
+            DemoCivicOperationsAnalyzer(),
+        )
     return DemoCivicOperationsAnalyzer()

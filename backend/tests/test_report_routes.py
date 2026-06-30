@@ -45,6 +45,7 @@ class FakeRouteReportService:
             suggested_next_action="Publish for community verification.",
             location="Sector 12",
             landmark="City Public School",
+            ai_model="gemini-test",
             latitude=26.9124,
             longitude=75.7873,
             urgency_note=None,

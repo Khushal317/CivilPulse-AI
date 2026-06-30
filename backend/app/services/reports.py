@@ -17,7 +17,7 @@ from app.schemas.issues import (
     ReportDraftResponse,
     ReportDraftUpdate,
 )
-from app.services.ai import CivicIssueAnalyzer
+from app.services.ai import CivicIssueAnalyzer, analysis_model_name
 from app.services.areas import AreaScoreTrigger
 from app.services.images import ValidatedImage
 from app.services.storage import ImageStorage
@@ -67,6 +67,7 @@ def draft_to_response(draft: IssueDraft) -> ReportDraftResponse:
         original_description=draft.original_description,
         location=draft.location,
         landmark=draft.landmark,
+        ai_model=draft.ai_model or "unknown-ai-model",
         latitude=draft.latitude,
         longitude=draft.longitude,
         urgency_note=draft.urgency_note,
@@ -111,7 +112,7 @@ class ReportService:
                 image_key=stored.key,
                 image_mime=stored.mime_type,
                 **analysis.model_dump(),
-                ai_model=self.analyzer.model_name,
+                ai_model=analysis_model_name(analysis, self.analyzer.model_name),
                 prompt_version=self.settings.ai_prompt_version,
                 expires_at=now_utc() + timedelta(minutes=self.settings.report_draft_ttl_minutes),
             )

@@ -12,6 +12,7 @@ from app.services.operations_ai import (
     OPERATIONS_SYSTEM_INSTRUCTION,
     DemoCivicOperationsAnalyzer,
     GeminiCivicOperationsAnalyzer,
+    SafeFallbackOperationsAnalyzer,
     operations_prompt,
 )
 
@@ -241,3 +242,17 @@ def test_gemini_operations_analyzer_skips_provider_when_no_active_issues() -> No
     assert result.model_used == "system-empty"
     assert FakeGenAIClient.latest_models is not None
     assert FakeGenAIClient.latest_models.calls == []
+
+
+def test_safe_fallback_operations_analyzer_uses_demo_when_gemini_is_unavailable() -> None:
+    FakeGenAIClient.next_response = TimeoutError("network unreachable")
+    analyzer = SafeFallbackOperationsAnalyzer(
+        GeminiCivicOperationsAnalyzer(settings()),
+        DemoCivicOperationsAnalyzer(),
+    )
+
+    result = analyzer.analyze([operations_issue()])
+
+    assert result.model_used == "demo-civic-operations-agent-v1"
+    assert result.total_issues_analyzed == 1
+    assert analyzer.model_name == "demo-civic-operations-agent-v1"

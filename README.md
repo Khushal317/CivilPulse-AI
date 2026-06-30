@@ -145,7 +145,15 @@ Gemini.
 
 ## Current Phase
 
-Phase 10 adds testing and acceptance coverage: backend Gemini/provider failure
-tests, a full pothole-near-school service acceptance flow, frontend route-level
-acceptance coverage, PostgreSQL migration checks, production build verification,
-and live browser smoke notes in `docs/testing-acceptance.md`.
+Phase 11 prepares deployment and handover. The production path, environment
+variables, smoke tests, migration step, backup/restore expectations, rollback
+procedure, and admin handover are documented in `docs/deployment.md`.
+
+Read-only deployment smoke check:
+
+```bash
+cd backend
+python -m scripts.smoke_deployment \
+  --api-base-url https://replace-with-api.example.com \
+  --frontend-url https://replace-with-frontend.example.com
+```
