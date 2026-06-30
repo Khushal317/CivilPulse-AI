@@ -3,12 +3,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import NAMESPACE_URL, UUID, uuid5
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageOps
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db.session import get_engine
+from app.domain.areas import BASELINE_AREA_SCORE
 from app.domain.enums import (
     CommunityActionType,
     IssueCategory,
@@ -18,8 +19,10 @@ from app.domain.enums import (
     UrgencyLevel,
 )
 from app.models.area import Area
+from app.models.area_score_event import AreaScoreEvent
 from app.models.community_action import CommunityAction
 from app.models.issue import Issue
+from app.models.issue_draft import IssueDraft
 from app.models.issue_update import IssueUpdate
 from app.models.mission import Mission
 from app.repositories.areas import SQLAlchemyAreaRepository, get_or_create_area_for_location
@@ -37,13 +40,15 @@ class DemoIssue:
     latitude: float
     longitude: float
     confirmations: int
+    created_days_ago: int
     department: str
+    source_image_filename: str
     description: str
 
 
 DEMO_ISSUES = (
     DemoIssue(
-        "Damaged road surface near World Trade Park",
+        "Large potholes holding rainwater near World Trade Park",
         IssueCategory.ROAD_DAMAGE,
         IssueSeverity.HIGH,
         IssueStatus.COMMUNITY_VERIFIED,
@@ -51,146 +56,111 @@ DEMO_ISSUES = (
         "World Trade Park, JLN Marg",
         26.8530,
         75.8056,
-        7,
-        "Jaipur Development Authority / Road Maintenance",
-        "Commuters reported broken road patches and rough edges near the World Trade Park "
-        "service lane.",
-    ),
-    DemoIssue(
-        "Streetlights flickering around Jawahar Circle",
-        IssueCategory.STREETLIGHT,
-        IssueSeverity.MEDIUM,
-        IssueStatus.IN_PROGRESS,
-        "Jawahar Circle",
-        "Patrika Gate walking track",
-        26.8427,
-        75.8034,
+        9,
         5,
-        "Municipal Lighting",
-        "Evening walkers reported multiple flickering lights around the Jawahar Circle "
-        "walking track.",
+        "Jaipur Development Authority / Road Maintenance",
+        "road0.jpeg",
+        "Commuters reported deep broken road patches filled with muddy water near the "
+        "World Trade Park service lane, creating a skid risk for two-wheelers.",
     ),
     DemoIssue(
-        "Overflowing waste bins outside City Park",
-        IssueCategory.GARBAGE_WASTE,
-        IssueSeverity.HIGH,
+        "Severely broken road edge near City Park",
+        IssueCategory.ROAD_DAMAGE,
+        IssueSeverity.CRITICAL,
         IssueStatus.ESCALATED,
         "Mansarovar",
-        "City Park entrance",
+        "City Park approach road",
         26.8498,
         75.7515,
+        5,
         8,
-        "Sanitation Department",
-        "Residents reported overflowing bins and scattered waste near the City Park entrance.",
+        "Jaipur Development Authority / Road Maintenance",
+        "road1.avif",
+        "Residents reported a badly damaged road edge on the City Park approach road that "
+        "could become dangerous during evening traffic and rain.",
     ),
     DemoIssue(
-        "Water leaking across the footpath near Statue Circle",
-        IssueCategory.WATER_LEAKAGE,
-        IssueSeverity.HIGH,
-        IssueStatus.IN_PROGRESS,
-        "C-Scheme",
-        "Statue Circle",
-        26.9056,
-        75.8064,
-        6,
-        "Water Department",
-        "Office commuters reported a visible water leak spreading across the footpath near "
-        "Statue Circle.",
-    ),
-    DemoIssue(
-        "Blocked drain causing waterlogging in market lane",
-        IssueCategory.DRAINAGE_SEWAGE,
-        IssueSeverity.HIGH,
-        IssueStatus.COMMUNITY_VERIFIED,
-        "Bapu Bazaar",
-        "Bapu Bazaar main lane",
-        26.9207,
-        75.8257,
-        9,
-        "Drainage / Sewage Department",
-        "Shopkeepers reported waterlogging from a blocked drain in a busy Bapu Bazaar lane.",
-    ),
-    DemoIssue(
-        "Broken pedestrian railing near metro approach",
-        IssueCategory.PUBLIC_SAFETY,
+        "Flood-damaged road stretch needs barricading",
+        IssueCategory.ROAD_DAMAGE,
         IssueSeverity.CRITICAL,
         IssueStatus.IN_PROGRESS,
-        "Civil Lines",
-        "Civil Lines Metro Station approach",
-        26.9060,
-        75.7823,
-        9,
-        "Public Works / Public Safety",
-        "Pedestrians reported a broken railing near the Civil Lines metro approach.",
+        "Amer Road",
+        "Jal Mahal promenade approach",
+        26.9535,
+        75.8464,
+        7,
+        2,
+        "Public Works / Road Safety",
+        "road2.jpg",
+        "Visitors reported a dangerous washed-out road stretch near the Jal Mahal approach "
+        "that needs temporary barricading and repair planning.",
     ),
     DemoIssue(
-        "Uneven footpath outside Mall of Jaipur",
+        "Broken footpath tiles outside Mall of Jaipur",
         IssueCategory.ROAD_DAMAGE,
         IssueSeverity.MEDIUM,
-        IssueStatus.RESOLVED,
+        IssueStatus.COMMUNITY_VERIFIED,
         "Vaishali Nagar",
         "Mall of Jaipur, Gandhi Path",
         26.9124,
         75.7432,
-        5,
+        6,
+        4,
         "Public Works / Footpath Maintenance",
-        "Residents reported uneven paving stones outside Mall of Jaipur that made walking "
-        "difficult.",
+        "footpath0.jpeg",
+        "Residents reported a sunken patch of broken paving blocks outside Mall of Jaipur "
+        "that makes the walkway difficult for pedestrians.",
     ),
     DemoIssue(
-        "Garbage scattered near Govind Marg bus stop",
-        IssueCategory.GARBAGE_WASTE,
+        "Cracked pedestrian path near Statue Circle",
+        IssueCategory.ROAD_DAMAGE,
         IssueSeverity.MEDIUM,
         IssueStatus.REPORTED,
-        "Raja Park",
-        "Govind Marg bus stop",
-        26.8960,
-        75.8276,
+        "C-Scheme",
+        "Statue Circle pedestrian path",
+        26.9056,
+        75.8064,
         2,
-        "Sanitation Department",
-        "Commuters reported loose garbage collecting near the Govind Marg bus stop.",
+        1,
+        "Public Works / Footpath Maintenance",
+        "footpath1.jpeg",
+        "Office commuters reported cracked and uneven footpath slabs near Statue Circle "
+        "that can trip pedestrians during rush hours.",
     ),
     DemoIssue(
-        "Streetlight outage outside SMS Hospital side road",
-        IssueCategory.STREETLIGHT,
+        "Open footpath cavity near Raja Park shops",
+        IssueCategory.PUBLIC_SAFETY,
         IssueSeverity.HIGH,
         IssueStatus.ESCALATED,
+        "Raja Park",
+        "Govind Marg shopping stretch",
+        26.8960,
+        75.8276,
+        8,
+        6,
+        "Public Works / Public Safety",
+        "footpath2.jpeg",
+        "Pedestrians reported a large open cavity in the footpath near the Raja Park shop "
+        "fronts, creating a clear fall risk.",
+    ),
+    DemoIssue(
+        "Water spraying from pipe joint near SMS Hospital",
+        IssueCategory.WATER_LEAKAGE,
+        IssueSeverity.HIGH,
+        IssueStatus.IN_PROGRESS,
         "Sawai Ram Singh Road",
-        "Sawai Man Singh Hospital",
+        "Sawai Man Singh Hospital side road",
         26.9028,
         75.8166,
-        5,
-        "Municipal Lighting",
-        "Visitors reported a dark side road outside SMS Hospital during evening hours.",
+        6,
+        7,
+        "Water Department",
+        "water0.jpeg",
+        "Visitors reported a pipe joint spraying water near the SMS Hospital side road, "
+        "wasting water and making the edge of the road slippery.",
     ),
     DemoIssue(
-        "Open drain cover near Jagatpura station road",
-        IssueCategory.PUBLIC_SAFETY,
-        IssueSeverity.CRITICAL,
-        IssueStatus.COMMUNITY_VERIFIED,
-        "Jagatpura",
-        "Jagatpura Railway Station road",
-        26.8324,
-        75.8422,
-        11,
-        "Public Works / Public Safety",
-        "Residents reported an open drain cover on the station approach road in Jagatpura.",
-    ),
-    DemoIssue(
-        "Sewage water collecting near Jal Mahal promenade",
-        IssueCategory.DRAINAGE_SEWAGE,
-        IssueSeverity.HIGH,
-        IssueStatus.COMMUNITY_VERIFIED,
-        "Amer Road",
-        "Jal Mahal promenade",
-        26.9535,
-        75.8464,
-        4,
-        "Drainage / Sewage Department",
-        "Visitors reported sewage water collecting near the public walkway by Jal Mahal.",
-    ),
-    DemoIssue(
-        "Small pipeline leak near Durgapura bus stop",
+        "Small but continuous pipe leak near Durgapura",
         IssueCategory.WATER_LEAKAGE,
         IssueSeverity.LOW,
         IssueStatus.RESOLVED,
@@ -198,36 +168,76 @@ DEMO_ISSUES = (
         "Durgapura bus stop",
         26.8467,
         75.7936,
-        1,
+        3,
+        3,
         "Water Department",
-        "A small roadside pipeline leak was reported near the Durgapura bus stop.",
+        "water1.jpeg",
+        "A small continuous pipe leak was reported near the Durgapura bus stop and marked "
+        "resolved after local repair confirmation.",
     ),
     DemoIssue(
-        "Damaged road markings near Jawahar Kala Kendra",
-        IssueCategory.ROAD_DAMAGE,
-        IssueSeverity.LOW,
-        IssueStatus.REJECTED,
-        "JLN Marg",
-        "Jawahar Kala Kendra junction",
-        26.8644,
-        75.8100,
-        0,
-        "Traffic Engineering / Road Marking",
-        "A citizen reported faded markings near Jawahar Kala Kendra; the demo status shows "
-        "a rejected report.",
+        "Seepage staining under market structure",
+        IssueCategory.WATER_LEAKAGE,
+        IssueSeverity.MEDIUM,
+        IssueStatus.COMMUNITY_VERIFIED,
+        "Bapu Bazaar",
+        "Bapu Bazaar covered lane",
+        26.9207,
+        75.8257,
+        5,
+        10,
+        "Water Department / Building Maintenance",
+        "water2.jpg",
+        "Shopkeepers reported visible seepage marks under a busy market structure, suggesting "
+        "a slow leak that needs inspection before it worsens.",
     ),
     DemoIssue(
-        "Construction debris blocking footpath near Ajmeri Gate",
-        IssueCategory.OTHER,
+        "Open drinking activity near Civil Lines public seating",
+        IssueCategory.PUBLIC_SAFETY,
+        IssueSeverity.HIGH,
+        IssueStatus.COMMUNITY_VERIFIED,
+        "Civil Lines",
+        "Civil Lines Metro Station approach road",
+        26.9060,
+        75.7823,
+        9,
+        4,
+        "Community Policing / Public Safety",
+        "alco1.jpg",
+        "Residents reported open alcohol consumption near public seating at night, raising "
+        "concerns about nuisance and safety for pedestrians.",
+    ),
+    DemoIssue(
+        "Late-night drinking outside liquor shop frontage",
+        IssueCategory.PUBLIC_SAFETY,
         IssueSeverity.MEDIUM,
         IssueStatus.REPORTED,
-        "Nehru Bazaar",
-        "Ajmeri Gate",
-        26.9167,
-        75.8171,
+        "Jagatpura",
+        "Jagatpura Railway Station road market",
+        26.8324,
+        75.8422,
         2,
-        "Municipal Citizen Services",
-        "Pedestrians reported construction debris narrowing the footpath near Ajmeri Gate.",
+        1,
+        "Community Policing / Public Safety",
+        "alcoho.jpeg",
+        "Residents reported late-night drinking near a shop frontage close to the station "
+        "road market and requested visible monitoring.",
+    ),
+    DemoIssue(
+        "Alcohol litter and gathering near Jawahar Circle",
+        IssueCategory.PUBLIC_SAFETY,
+        IssueSeverity.MEDIUM,
+        IssueStatus.RESOLVED,
+        "Jawahar Circle",
+        "Patrika Gate parking edge",
+        26.8427,
+        75.8034,
+        4,
+        2,
+        "Community Policing / Public Safety",
+        "alcoho2.jpeg",
+        "A resident reported alcohol-related litter and gathering near the Patrika Gate "
+        "parking edge; the issue is marked resolved after local follow-up.",
     ),
 )
 
@@ -264,17 +274,31 @@ LEGACY_JAIPUR_AREA_COORDINATES = {
 }
 
 
-def create_demo_image(path: Path, number: int, issue: DemoIssue) -> None:
+def demo_source_image_path(storage_path: Path, issue: DemoIssue) -> Path:
+    packaged_demo_source = Path(__file__).resolve().parent / "demo_issue_images" / (
+        issue.source_image_filename
+    )
+    if packaged_demo_source.exists():
+        return packaged_demo_source
+    local_demo_source = storage_path / "demo-source" / issue.source_image_filename
+    if local_demo_source.exists():
+        return local_demo_source
+    downloads_source = Path("/Users/khush/Downloads") / issue.source_image_filename
+    if downloads_source.exists():
+        return downloads_source
+    raise FileNotFoundError(
+        "Missing demo source image "
+        f"{issue.source_image_filename}. Add it to {storage_path / 'demo-source'}.",
+    )
+
+
+def write_demo_image(path: Path, issue: DemoIssue, *, storage_path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    colors = ("#dcecdf", "#f4e6bf", "#dbe8f1", "#eadbd8")
-    image = Image.new("RGB", (960, 600), color=colors[number % len(colors)])
-    draw = ImageDraw.Draw(image)
-    draw.rectangle((55, 55, 905, 545), outline="#17643c", width=8)
-    draw.text((90, 100), f"CivicPulse Jaipur demo report {number + 1}", fill="#173226")
-    draw.text((90, 160), issue.category.value.replace("_", " ").title(), fill="#17643c")
-    draw.text((90, 220), issue.location, fill="#26372f")
-    draw.text((90, 280), issue.landmark, fill="#26372f")
-    image.save(path, format="PNG")
+    source_path = demo_source_image_path(storage_path, issue)
+    with Image.open(source_path) as source_image:
+        image = ImageOps.exif_transpose(source_image).convert("RGB")
+        image.thumbnail((1600, 1600))
+        image.save(path, format="JPEG", quality=88, optimize=True)
 
 
 def ensure_timeline(session: Session, issue: Issue, created_at: datetime) -> None:
@@ -370,6 +394,26 @@ def remove_obvious_phase_test_records(session: Session) -> None:
             session.delete(issue)
 
 
+def reset_demo_reports_and_scores(session: Session) -> None:
+    for draft in session.scalars(select(IssueDraft)).all():
+        session.delete(draft)
+    for issue in session.scalars(select(Issue)).all():
+        session.delete(issue)
+    for score_event in session.scalars(select(AreaScoreEvent)).all():
+        session.delete(score_event)
+    for area in session.scalars(select(Area)).all():
+        area.overall_score = BASELINE_AREA_SCORE
+        area.infrastructure_score = BASELINE_AREA_SCORE
+        area.cleanliness_score = BASELINE_AREA_SCORE
+        area.safety_score = BASELINE_AREA_SCORE
+        area.participation_score = BASELINE_AREA_SCORE
+        area.responsiveness_score = BASELINE_AREA_SCORE
+        area.environment_score = BASELINE_AREA_SCORE
+        area.rank = None
+        area.status_label = "improving"
+    session.flush()
+
+
 def migrate_legacy_jaipur_records(session: Session) -> set[UUID]:
     touched_area_ids: set[UUID] = set()
     for issue in session.scalars(select(Issue).where(Issue.public_reference.not_like("CP-DEMO-%"))):
@@ -415,24 +459,29 @@ def seed(session: Session) -> tuple[int, int]:
     added_actions = 0
     now = datetime.now(UTC)
     touched_area_ids: set[UUID] = set()
+    reset_demo_reports_and_scores(session)
     for index, sample in enumerate(DEMO_ISSUES):
         reference = f"CP-DEMO-{index + 1:04d}"
         existing = session.scalar(select(Issue).where(Issue.public_reference == reference))
 
-        image_key = f"issues/demo-{index + 1:02d}.png"
-        create_demo_image(settings.local_storage_path / image_key, index, sample)
+        image_key = f"issues/jaipur-issue-{index + 1:02d}.jpg"
+        write_demo_image(
+            settings.local_storage_path / image_key,
+            sample,
+            storage_path=settings.local_storage_path,
+        )
         area = get_or_create_area_for_location(session, sample.location, city=JAIPUR_CITY)
         touched_area_ids.add(area.id)
         created_at = (
             existing.created_at
             if existing is not None
-            else now - timedelta(days=index, minutes=index * 7)
+            else now - timedelta(days=sample.created_days_ago, minutes=index * 7)
         )
         issue = existing or Issue(
             id=uuid5(NAMESPACE_URL, f"civicpulse-demo-issue-{index + 1}"),
             public_reference=reference,
             image_key=image_key,
-            image_mime="image/png",
+            image_mime="image/jpeg",
             citizen_name=None,
             citizen_contact=None,
             created_at=created_at,
@@ -468,10 +517,10 @@ def seed(session: Session) -> tuple[int, int]:
         issue.latitude = sample.latitude
         issue.longitude = sample.longitude
         issue.image_key = image_key
-        issue.image_mime = "image/png"
+        issue.image_mime = "image/jpeg"
         issue.status = sample.status
-        issue.ai_model = "jaipur-demo-seed"
-        issue.prompt_version = "jaipur-demo-seed-v1"
+        issue.ai_model = "jaipur-real-issue-seed"
+        issue.prompt_version = "jaipur-real-issue-seed-v1"
         issue.area = area
         issue.updated_at = created_at
         if existing is None:
