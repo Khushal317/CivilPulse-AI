@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Cookie, Depends, Header, Query, Request, Response, status
@@ -12,6 +12,7 @@ from app.api.dependencies import (
     OperationsServiceDependency,
     SettingsDependency,
 )
+from app.core.config import Settings
 from app.domain.enums import IssueCategory, IssueSeverity, IssueStatus
 from app.schemas.admin import (
     AdminDashboardResponse,
@@ -35,6 +36,14 @@ from app.schemas.operations import OperationsReportResponse
 from app.services.admin_auth import ADMIN_COOKIE_NAME, AuthenticatedAdmin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+def admin_cookie_samesite(settings: Settings) -> Literal["strict", "none"]:
+    """Use cross-site admin cookies only for split-domain production deployments."""
+
+    if settings.app_env == "production":
+        return "none"
+    return "strict"
 
 
 def require_admin(
@@ -76,7 +85,7 @@ def login(
         max_age=settings.admin_session_ttl_minutes * 60,
         httponly=True,
         secure=settings.app_env == "production",
-        samesite="strict",
+        samesite=admin_cookie_samesite(settings),
         path="/",
     )
     return session
@@ -101,7 +110,7 @@ def logout(
         path="/",
         httponly=True,
         secure=settings.app_env == "production",
-        samesite="strict",
+        samesite=admin_cookie_samesite(settings),
     )
     response.status_code = status.HTTP_204_NO_CONTENT
     return response
